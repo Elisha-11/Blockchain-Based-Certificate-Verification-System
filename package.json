@@ -1,0 +1,26 @@
+{
+  "name": "blockchain-based-certificate-verification-system",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Elisha-11/Blockchain-Based-Certificate-Verification-System.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Elisha-11/Blockchain-Based-Certificate-Verification-System/issues"
+  },
+  "homepage": "https://github.com/Elisha-11/Blockchain-Based-Certificate-Verification-System#readme",
+  "dependencies": {
+    "bcryptjs": "^3.0.3"
+  }
+}
