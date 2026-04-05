@@ -21,6 +21,7 @@
   },
   "homepage": "https://github.com/Elisha-11/Blockchain-Based-Certificate-Verification-System#readme",
   "dependencies": {
-    "bcryptjs": "^3.0.3"
+    "bcryptjs": "^3.0.3",
+    "jsonwebtoken": "^9.0.3"
   }
 }
