@@ -12,17 +12,22 @@ const issueSchema = z.object({
 
 exports.issue = async (req, res) => {
   try {
-    console.log('📥 Issuance request body:', req.body); // Debug log
+    console.log('Issuance request body:', req.body);
     
     const data = issueSchema.parse(req.body);
-    console.log('✅ Schema validated:', data);
+    console.log('Schema validated:', data);
     
     const result = await certService.issueCertificate(data);
-    console.log('✅ Certificate issued:', result.cert_id);
+    console.log('Certificate issued:', result?.cert_id);
+    
+    // Safety check: ensure result exists
+    if (!result || !result.cert_id) {
+      throw new Error('Certificate issuance returned undefined result');
+    }
     
     res.status(201).json(result);
   } catch (err) {
-    console.error('❌ Issuance error:', err);
+    console.error(' Issuance error:', err);
     
     // Safe Zod error handling
     if (err instanceof z.ZodError) {

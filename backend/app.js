@@ -12,6 +12,7 @@ app.use(express.json());
 // Routes
 app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/certificates', require('./routes/certificateRoutes'));
+app.use('/api/verify', require('./routes/verifyRoutes'));
 
 // Health check
 app.get('/api/health', async (req, res) => {
