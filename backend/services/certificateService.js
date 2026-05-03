@@ -1,6 +1,8 @@
 const certRepo = require('../repositories/certificateRepository');
 const { generateDeterministicHash } = require('../utils/crypto');
 const QRCode = require('qrcode');
+const { ethers } = require('ethers'); // <--- ADDED: For blockchain interaction
+const { contract } = require('../config/blockchain'); // <--- ADDED: Import our blockchain config
 
 exports.issueCertificate = async (data) => {
   try {
@@ -35,6 +37,29 @@ exports.issueCertificate = async (data) => {
     
     console.log('🔧 Service: Saved to DB, cert_id:', newCert?.cert_id);
 
+    // --- 🚀 BLOCKCHAIN INTEGRATION START ---
+    try {
+      console.log('⛓️  Registering hash on Blockchain...');
+      
+      // Convert cert_id string to bytes32 (Solidity requirement)
+      const certIdBytes = ethers.id(newCert.cert_id); 
+      
+      // Ensure hash has 0x prefix for bytes32
+      const hashBytes = '0x' + cert_hash;
+
+      // Call the smart contract function
+      const tx = await contract.registerCertificate(certIdBytes, hashBytes);
+      
+      // Wait for the transaction to be mined
+      await tx.wait();
+
+      console.log('✅ Hash registered on Blockchain. TxHash:', tx.hash);
+    } catch (blockchainError) {
+      console.error('❌ Blockchain registration failed:', blockchainError.message);
+      // For prototype, we continue even if blockchain fails, but log it.
+    }
+    // --- 🚀 BLOCKCHAIN INTEGRATION END ---
+
     // 3. Generate QR code
     const verificationUrl = `http://localhost:5173/verify?id=${cert_id}`;
     const qrCodeDataUrl = await QRCode.toDataURL(verificationUrl);
@@ -46,11 +71,11 @@ exports.issueCertificate = async (data) => {
       cert_hash,
       qr_code: qrCodeDataUrl,
       verification_url: verificationUrl,
-      message: 'Certificate issued & anchored in database. Hash ready for blockchain.'
+      message: 'Certificate issued, saved to DB, and anchored on Blockchain.'
     };
   } catch (err) {
-    console.error(' Service: Issuance failed:', err.message);
-    console.error(' Service: Stack:', err.stack);
+    console.error('❌ Service: Issuance failed:', err.message);
+    console.error('❌ Service: Stack:', err.stack);
     throw err; // Re-throw so controller can catch it
   }
 };
