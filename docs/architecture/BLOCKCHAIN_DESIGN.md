@@ -1,10 +1,10 @@
-📚 FINAL PROJECT DOCUMENTATION: DAY 1 - BLOCKCHAIN INTEGRATION
+FINAL PROJECT DOCUMENTATION: DAY 1 - BLOCKCHAIN INTEGRATION
 Date: April 21, 2026
 Students: Elisha Lungu (2021490777) & Nkonsi David Shumba (2020079563)
 Project: Blockchain-Based Academic Certificate Verification System
 Status: Phase 3 Complete - Hybrid Architecture Operational
 
-📋 EXECUTIVE SUMMARY
+EXECUTIVE SUMMARY
 Today, we successfully integrated a local Ethereum blockchain into your existing Node.js/MySQL backend. The system now performs dual-anchoring:
 Off-Chain: Certificate metadata is stored in MySQL for fast retrieval.
 On-Chain: Cryptographic hashes are registered on a Smart Contract for immutability.
@@ -24,7 +24,7 @@ cd blockchain
 npm uninstall hardhat @nomicfoundation/hardhat-toolbox
 npm install --save-dev hardhat@2.22.0 @nomicfoundation/hardhat-toolbox
 
-💻 PART 2: CORE CODE IMPLEMENTATIONS
+PART 2: CORE CODE IMPLEMENTATIONS
 2.1 Smart Contract (blockchain/contracts/CertificateRegistry.sol)
 This contract stores certificate hashes and allows verification.
 
@@ -60,7 +60,7 @@ module.exports = {
 2.3 Deployment Script (blockchain/scripts/deploy.js)
 
 2.4 Backend Blockchain Config (backend/config/blockchain.js)
-⚠️ IMPORTANT: You must update CONTRACT_ADDRESS and PRIVATE_KEY every time you restart npx hardhat node.
+IMPORTANT: You must update CONTRACT_ADDRESS and PRIVATE_KEY every time you restart npx hardhat node.
 
 const { ethers } = require('ethers');
 const fs = require('fs');
@@ -105,28 +105,28 @@ exports.issueCertificate = async (data) => {
       const hashBytes = '0x' + cert_hash;
       const tx = await contract.registerCertificate(certIdBytes, hashBytes);
       await tx.wait();
-      console.log('✅ Hash registered. TxHash:', tx.hash);
-    } catch (err) { console.error('❌ Blockchain Error:', err.message); }
+      console.log('Hash registered. TxHash:', tx.hash);
+    } catch (err) { console.error('Blockchain Error:', err.message); }
 
     // 4. Return Response
     return { success: true, cert_id: newCert.cert_id, cert_hash, message: 'Issued & Anchored on Blockchain.' };
   } catch (err) { throw err; }
 };
 
-🚀 PART 3: DAILY WORKFLOW COMMANDS
+ PART 3: DAILY WORKFLOW COMMANDS
  follow this exact sequence:
 Step 1: Start Local Blockchain (Terminal 1)
 
 cd blockchain
 npx hardhat node
 
-📝 Copy the Private Key for Account #0 from the output.
+Copy the Private Key for Account #0 from the output.
 
 Step 2: Deploy Contract (Terminal 2)
 cd blockchain
 npx hardhat run scripts/deploy.js --network localhost
 
-📝 Copy the Deployed Address from the output.
+Copy the Deployed Address from the output.
 Step 3: Update Backend Config
 Open backend/config/blockchain.js and paste the new Address and Private Key.
 Step 4: Start Backend Server (Terminal 3)
@@ -150,11 +150,11 @@ Invoke-RestMethod -Uri "http://127.0.0.1:5000/api/certificates" -Method Post -Co
 
 | Component            | Status        | Evidence                                                  |
 |---------------------|--------------|-----------------------------------------------------------|
-| MySQL Database      | ✅ Working    | Certificates saved in `certificates` table               |
-| Local Blockchain    | ✅ Working    | Hardhat node running on port 8545                        |
-| Smart Contract      | ✅ Deployed   | `CertificateRegistry` deployed to local address          |
-| Backend Integration | ✅ Working    | Logs show ✅ Hash registered on Blockchain               |
-| Dual-Anchoring      | ✅ Verified   | Data exists in both MySQL and Ethereum                   |
+| MySQL Database      | Working    | Certificates saved in `certificates` table               |
+| Local Blockchain    | Working    | Hardhat node running on port 8545                        |
+| Smart Contract      | Deployed   | `CertificateRegistry` deployed to local address          |
+| Backend Integration | Working    | Logs show  Hash registered on Blockchain               |
+| Dual-Anchoring      |  Verified   | Data exists in both MySQL and Ethereum                   |
 
 
 NEXT STEPS FOR TOMORROW

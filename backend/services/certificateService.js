@@ -1,8 +1,9 @@
+
 const certRepo = require('../repositories/certificateRepository');
 const { generateDeterministicHash } = require('../utils/crypto');
 const QRCode = require('qrcode');
-const { ethers } = require('ethers'); // <--- ADDED: For blockchain interaction
-const { contract } = require('../config/blockchain'); // <--- ADDED: Import our blockchain config
+const { ethers } = require('ethers'); 
+const { contract } = require('../config/blockchain'); 
 
 exports.issueCertificate = async (data) => {
   try {
@@ -13,16 +14,16 @@ exports.issueCertificate = async (data) => {
     
     // 1. Generate deterministic hash
     const hashInput = {
-      cert_id,
-      student_name: data.student_name?.trim()?.toLowerCase() || '',
-      program: data.program?.trim()?.toLowerCase() || '',
-      institution_id: data.institution_id,
-      issue_date: data.issue_date
-    };
-    console.log('🔧 Service: Hash input:', hashInput);
+  cert_id,
+  student_name: data.student_name?.trim()?.toLowerCase() || '',
+  program: data.program?.trim()?.toLowerCase() || '',
+  institution_id: data.institution_id,
+  issue_date: String(data.issue_date).trim()  
+};
+    console.log(' Service: Hash input:', hashInput);
     
     const cert_hash = generateDeterministicHash(hashInput);
-    console.log('🔧 Service: Generated hash:', cert_hash);
+    console.log(' Service: Generated hash:', cert_hash);
 
     // 2. Save to MySQL via repository
     const newCert = await certRepo.create({
@@ -35,17 +36,17 @@ exports.issueCertificate = async (data) => {
       cert_hash
     });
     
-    console.log('🔧 Service: Saved to DB, cert_id:', newCert?.cert_id);
+    console.log(' Service: Saved to DB, cert_id:', newCert?.cert_id);
 
-    // --- 🚀 BLOCKCHAIN INTEGRATION START ---
+    // ---  BLOCKCHAIN INTEGRATION START ---
     try {
-      console.log('⛓️  Registering hash on Blockchain...');
+      console.log(' Registering hash on Blockchain...');
       
       // Convert cert_id string to bytes32 (Solidity requirement)
       const certIdBytes = ethers.id(newCert.cert_id); 
       
       // Ensure hash has 0x prefix for bytes32
-      const hashBytes = '0x' + cert_hash;
+      const hashBytes = ethers.toBeArray ('0x' + cert_hash);
 
       // Call the smart contract function
       const tx = await contract.registerCertificate(certIdBytes, hashBytes);
@@ -53,12 +54,12 @@ exports.issueCertificate = async (data) => {
       // Wait for the transaction to be mined
       await tx.wait();
 
-      console.log('✅ Hash registered on Blockchain. TxHash:', tx.hash);
+      console.log(' Hash registered on Blockchain. TxHash:', tx.hash);
     } catch (blockchainError) {
-      console.error('❌ Blockchain registration failed:', blockchainError.message);
+      console.error(' Blockchain registration failed:', blockchainError.message);
       // For prototype, we continue even if blockchain fails, but log it.
     }
-    // --- 🚀 BLOCKCHAIN INTEGRATION END ---
+    // ---  BLOCKCHAIN INTEGRATION END ---
 
     // 3. Generate QR code
     const verificationUrl = `http://localhost:5173/verify?id=${cert_id}`;
@@ -74,8 +75,8 @@ exports.issueCertificate = async (data) => {
       message: 'Certificate issued, saved to DB, and anchored on Blockchain.'
     };
   } catch (err) {
-    console.error('❌ Service: Issuance failed:', err.message);
-    console.error('❌ Service: Stack:', err.stack);
+    console.error(' Service: Issuance failed:', err.message);
+    console.error(' Service: Stack:', err.stack);
     throw err; // Re-throw so controller can catch it
   }
 };

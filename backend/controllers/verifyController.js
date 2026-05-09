@@ -17,7 +17,7 @@ exports.verify = async (req, res) => {
     if (err instanceof z.ZodError) {
       return res.status(400).json({ error: err.errors[0].message });
     }
-    console.error('❌ Verification error:', err);
+    console.error(' Verification error:', err);
     res.status(500).json({ error: 'Verification failed', details: err.message });
   }
 };
