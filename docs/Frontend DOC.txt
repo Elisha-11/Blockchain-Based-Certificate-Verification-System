@@ -1,0 +1,51 @@
+:: Navigate to blockchain folder
+cd "C:\Users\dell 3150\Desktop\cert-verification-system\Blockchain-Based-Certificate-Verification-System\blockchain"
+
+:: Install dependencies (first time only)
+npm install
+
+:: Start the local Ethereum node
+npx hardhat node
+
+:: Navigate to blockchain folder (if not already there)
+cd "C:\Users\dell 3150\Desktop\cert-verification-system\Blockchain-Based-Certificate-Verification-System\blockchain"
+
+:: Compile & deploy the contract to local network
+npx hardhat run scripts/deploy.js --network localhost
+
+:: Navigate to backend folder
+cd "C:\Users\dell 3150\Desktop\cert-verification-system\Blockchain-Based-Certificate-Verification-System\backend"
+
+:: Install dependencies (first time only)
+npm install
+
+:: Update blockchain config (edit this file in Notepad/VS Code):
+:: backend/config/blockchain.js
+:: - Paste your deployed CONTRACT_ADDRESS
+:: - Ensure PRIVATE_KEY matches Account #0 from Terminal 1
+:: Example:
+::   const CONTRACT_ADDRESS = '0x5FbDB2315678afecb367f032d93F642f64180aa3';
+::   const PRIVATE_KEY = '0xac0974bec39a87054948a86a58deea4c5c02433658d9402f75d4d0a0a0a0a0a0';
+
+:: Start the backend server
+npx nodemon app.js
+
+:: === TERMINAL 1: Blockchain ===
+cd blockchain
+npx hardhat node
+
+:: === TERMINAL 2: Backend ===
+cd backend
+:: (First time: npm install)
+:: Update config/blockchain.js with deployed address
+npx nodemon app.js
+
+:: === TERMINAL 3: Frontend ===
+cd frontend
+:: (First time: npm install)
+npm run dev
+
+:: === BROWSER ===
+:: Open: http://localhost:5173/
+:: Login: admin@unza.zm / Admin@123!
+:: Issue & verify certificates!

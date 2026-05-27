@@ -49,35 +49,40 @@ exports.verifyCertificate = async (cert_id, context = {}) => {
 
   // 3. Check MySQL hash match
   const mysqlHashMatches = recomputedHash === cert.cert_hash;
-  // 4. Check Blockchain hash match
+
+// 4. Check Blockchain hash match
 let blockchainVerified = false;
 let blockchainError = null;
 
 try {
-  console.log(' Checking blockchain for hash...');
-  console.log(' Debug - Contract address:', contract.address);
-  console.log(' Debug - Cert ID:', cert.cert_id);
-  console.log(' Debug - Cert hash:', cert.cert_hash);
+  console.log('⛓️ Checking blockchain for hash...');
   
-  // Convert to bytes32 format (MUST match issuance exactly)
-  const certIdBytes = ethers.id(cert.cert_id);  // keccak256 hash of string → bytes32
-  const hashBytes = ethers.toBeArray('0x' + cert.cert_hash); // Ensure proper bytes32 format
+  //  LOG THE EXPORTED ADDRESS STRING (not contract.address)
+  const { CONTRACT_ADDRESS } = require('../config/blockchain');
+  console.log('⛓️ Debug - Contract address:', CONTRACT_ADDRESS);
+  console.log('⛓️ Debug - Cert ID:', cert.cert_id);
+  console.log('⛓️ Debug - Cert hash:', cert.cert_hash);
   
-  console.log(' Debug - certIdBytes:', certIdBytes);
-  console.log(' Debug - hashBytes:', ethers.hexlify(hashBytes));
+  // Convert to bytes32 format
+  const certIdBytes = ethers.id(cert.cert_id);
+  const hashBytes = ethers.toBeArray('0x' + cert.cert_hash);
+  
+  console.log('⛓️ Debug - certIdBytes:', certIdBytes);
+  console.log('⛓️ Debug - hashBytes:', ethers.hexlify(hashBytes));
+  
+  // Get the contract instance (fresh import to avoid caching issues)
+  const { contract } = require('../config/blockchain');
   
   // Call the smart contract's view function
   const result = await contract.verifyCertificate(certIdBytes, hashBytes);
   blockchainVerified = Boolean(result);
   
-  console.log('Blockchain verification result:', blockchainVerified);
+  console.log(' Blockchain verification result:', blockchainVerified);
 } catch (err) {
   console.error(' Blockchain check failed:', err.message);
   console.error(' Error code:', err.code);
-  console.error(' Error reason:', err.reason);
   blockchainError = err.message;
 }
-
   // 5. Determine final result
   const isRevoked = cert.status === 'revoked';
   let result, message;
