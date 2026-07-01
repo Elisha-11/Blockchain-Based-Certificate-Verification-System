@@ -2,8 +2,8 @@ const { ethers } = require('ethers');
 const fs = require('fs');
 const path = require('path');
 
-// ⚠️ CRITICAL: REPLACE WITH YOUR ACTUAL DEPLOYED ADDRESS
-const CONTRACT_ADDRESS = '0x5FbDB2315678afecb367f032d93F642f64180aa3'; // ← PASTE YOUR ADDRESS HERE
+// CORRECT DEPLOYED ADDRESS
+const CONTRACT_ADDRESS = '0x5FbDB2315678afecb367f64180aa3';
 
 const RPC_URL = 'http://127.0.0.1:8545';
 const PRIVATE_KEY = '0xea6c44ac03bff858b476bba40716402b03e41b8e97e276d1baec7c37d42484a0';
@@ -11,7 +11,7 @@ const PRIVATE_KEY = '0xea6c44ac03bff858b476bba40716402b03e41b8e97e276d1baec7c37d
 // Validate address BEFORE proceeding
 if (!CONTRACT_ADDRESS || !CONTRACT_ADDRESS.startsWith('0x') || CONTRACT_ADDRESS.length !== 42) {
   console.error(' FATAL: CONTRACT_ADDRESS is invalid');
-  console.error(' Expected: 0x + 40 hex chars (e.g., 0x5FbDB2315678afecb367f032d93F642f64180aa3)');
+  console.error(' Expected: 0x + 40 hex chars');
   process.exit(1);
 }
 
@@ -39,5 +39,5 @@ module.exports = {
   contract, 
   provider, 
   signer, 
-  CONTRACT_ADDRESS  // ← This is the key fix: export the raw address string
+  CONTRACT_ADDRESS
 };

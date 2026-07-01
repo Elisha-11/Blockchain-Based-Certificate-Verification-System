@@ -8,7 +8,7 @@ import Dashboard from './pages/Admin/Dashboard';
 import Certificates from './pages/Admin/Certificates';
 import Certificate from './pages/Certificate';
 
-// ✅ UX Enhancement: Auto-scroll to top on route change
+// UX Enhancement: Auto-scroll to top on route change
 function ScrollToTop() {
   const { pathname } = useLocation();
   useEffect(() => {
@@ -17,7 +17,7 @@ function ScrollToTop() {
   return null;
 }
 
-// ✅ Layout Shell: Separates structure from routing logic
+//  Layout Shell: Separates structure from routing logic
 function Layout() {
   return (
     <div className="min-h-screen flex flex-col bg-gray-50 antialiased text-gray-900">

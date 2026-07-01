@@ -162,3 +162,6 @@ Update Verification Endpoint: Modify verifyService.js to call contract.verifyCer
 Frontend UI: Build the React interface to display the "Blockchain Verified" badge.
 Final Report: Document this hybrid architecture as the core achievement of your project.
 You have successfully built a blockchain-integrated system. Great work!
+
+cd "C:\Users\dell 3150\Desktop\cert-verification-system\Blockchain-Based-Certificate-Verification-System\frontend"
+npm run dev -- --host
