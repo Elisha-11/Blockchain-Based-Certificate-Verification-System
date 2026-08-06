@@ -131,7 +131,7 @@ Step 3: Update Backend Config
 Open backend/config/blockchain.js and paste the new Address and Private Key.
 Step 4: Start Backend Server (Terminal 3)
 
-cd backend
+DIRcd backend
 npx nodemon app.js
 
 Step 5: Test Issuance (Terminal 4)
@@ -161,7 +161,7 @@ NEXT STEPS FOR TOMORROW
 Update Verification Endpoint: Modify verifyService.js to call contract.verifyCertificate() and compare the on-chain hash with the MySQL hash.
 Frontend UI: Build the React interface to display the "Blockchain Verified" badge.
 Final Report: Document this hybrid architecture as the core achievement of your project.
-You have successfully built a blockchain-integrated system. Great work!
+
 
 cd "C:\Users\dell 3150\Desktop\cert-verification-system\Blockchain-Based-Certificate-Verification-System\frontend"
 npm run dev -- --host

@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useLocation, Outlet } from 'react-router-dom';
 import { useEffect } from 'react';
 import Navbar from './components/Navbar';
 import Home from './pages/Home';
@@ -7,6 +7,7 @@ import Login from './pages/Admin/Login';
 import Dashboard from './pages/Admin/Dashboard';
 import Certificates from './pages/Admin/Certificates';
 import Certificate from './pages/Certificate';
+import AdminLayout from './components/AdminLayout';
 
 // UX Enhancement: Auto-scroll to top on route change
 function ScrollToTop() {
@@ -17,8 +18,8 @@ function ScrollToTop() {
   return null;
 }
 
-//  Layout Shell: Separates structure from routing logic
-function Layout() {
+// Public Layout Shell (for non-admin pages)
+function PublicLayout() {
   return (
     <div className="min-h-screen flex flex-col bg-gray-50 antialiased text-gray-900">
       <Navbar />
@@ -27,14 +28,7 @@ function Layout() {
         role="main" 
         aria-label="Main application content"
       >
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/verify" element={<Verify />} />
-          <Route path="/certificate/:certId" element={<Certificate />} />
-          <Route path="/admin/login" element={<Login />} />
-          <Route path="/admin/dashboard" element={<Dashboard />} />
-          <Route path="/admin/certificates" element={<Certificates />} />
-        </Routes>
+        <Outlet />
       </main>
       <footer 
         className="bg-blue-900 text-white text-center py-6 text-sm mt-auto border-t border-blue-800"
@@ -51,7 +45,22 @@ export default function App() {
   return (
     <Router>
       <ScrollToTop />
-      <Layout />
+      <Routes>
+        {/* Public Routes - Use PublicLayout */}
+        <Route element={<PublicLayout />}>
+          <Route path="/" element={<Home />} />
+          <Route path="/verify" element={<Verify />} />
+          <Route path="/certificate/:certId" element={<Certificate />} />
+          <Route path="/admin/login" element={<Login />} />
+        </Route>
+
+        {/* Admin Routes - Use Dynamic AdminLayout */}
+        <Route path="/admin" element={<AdminLayout />}>
+          <Route index element={<Dashboard />} />
+          <Route path="dashboard" element={<Dashboard />} />
+          <Route path="certificates" element={<Certificates />} />
+        </Route>
+      </Routes>
     </Router>
   );
 }

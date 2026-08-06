@@ -35,13 +35,14 @@ exports.login = async (req, res) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    // Generate JWT token
+    // Generate JWT token - USE SNAKE_CASE TO MATCH DATABASE
     const token = jwt.sign(
       { 
-        userId: user.user_id, 
+        user_id: user.user_id,          // FIXED: was userId
         email: user.email, 
         role: user.role, 
-        institutionId: user.institution_id 
+        institution_id: user.institution_id, // FIXED: was institutionId
+        full_name: user.full_name
       },
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
@@ -50,16 +51,17 @@ exports.login = async (req, res) => {
     // Update last login
     await pool.query('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE user_id = ?', [user.user_id]);
 
-    // Send success response
+    // Send success response - INCLUDE institution_id IN USER OBJECT
     res.json({
       success: true,
       message: 'Login successful',
       token,
       user: {
-        id: user.user_id,
+        user_id: user.user_id,          // FIXED: was id
         email: user.email,
         full_name: user.full_name,
-        role: user.role
+        role: user.role,
+        institution_id: user.institution_id // ADDED: was missing
       }
     });
 
@@ -74,7 +76,6 @@ exports.login = async (req, res) => {
   }
 };
 
-// Optional: Register endpoint (for testing)
 exports.register = async (req, res) => {
   try {
     const { email, password, full_name, role = 'verifier', institution_id = null } = req.body;

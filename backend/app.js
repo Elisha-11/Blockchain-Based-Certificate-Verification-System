@@ -13,18 +13,21 @@ app.use(express.json());
 app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/certificates', require('./routes/certificateRoutes'));
 app.use('/api/verify', require('./routes/verifyRoutes'));
+// ADD THIS LINE: Register institution routes
+app.use('/api/institutions', require('./routes/institutionRoutes'));
 
 // Health check
 app.get('/api/health', async (req, res) => {
   try {
     const connection = await pool.getConnection();
-    connection.release(); // Return connection to pool
+    connection.release();
     res.json({ status: 'OK', database: 'Connected', timestamp: new Date().toISOString() });
   } catch (error) {
-    console.error(' DB Connection Failed:', error.message);
+    console.error('DB Connection Failed:', error.message);
     res.status(500).json({ status: 'ERROR', database: 'Disconnected', error: error.message });
   }
 });
+
 // Root route
 app.get('/', (req, res) => {
   res.json({ message: 'Certificate Verification API', version: '1.0.0' });
@@ -39,7 +42,7 @@ app.use((req, res) => {
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, '0.0.0.0', () => {
   console.log('');
-  console.log(' Cert Verification Backend');
-  console.log(` Server running on http://127.0.0.1:${PORT}`);
+  console.log('Cert Verification Backend');
+  console.log(`Server running on http://127.0.0.1:${PORT}`);
   console.log('');
 });
