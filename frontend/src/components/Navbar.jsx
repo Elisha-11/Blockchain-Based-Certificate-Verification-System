@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Menu, X } from 'lucide-react';
+import { Menu, X } from 'lucide-react'; // ShieldCheck removed as requested
 
 export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
@@ -10,12 +10,12 @@ export default function Navbar() {
     <nav className="bg-blue-900 text-white shadow-md sticky top-0 z-50" role="navigation" aria-label="Main navigation">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
-          {/* Logo (Emoji removed for professional design) */}
+          {/* Clean Text Logo */}
           <Link 
             to="/" 
             className="text-lg sm:text-xl font-bold tracking-tight hover:text-blue-200 transition"
           >
-            UNZA CertVerify
+            Zambia Academic Credential Registry
           </Link>
 
           {/* Desktop Menu */}
