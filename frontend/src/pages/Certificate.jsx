@@ -18,18 +18,34 @@ export default function Certificate() {
 
   const fetchCertificate = async () => {
     try {
-      const verifyRes = await api.post('/verify', { cert_id: certId });
+      // Fetch full certificate details including institution_name
+      const res = await api.get(`/certificates/${certId}`);
       
-      if (!verifyRes.data.valid) {
+      if (!res.data) {
+        setError('Certificate not found');
+        setLoading(false);
+        return;
+      }
+      
+      const certData = res.data;
+      
+      // Verify blockchain status separately
+      let isValid = true;
+      try {
+        const verifyRes = await api.post('/verify', { cert_id: certId });
+        isValid = verifyRes.data.valid && verifyRes.data.status !== 'REVOKED';
+      } catch (e) {
+        console.warn('Verification check failed:', e.message);
+      }
+      
+      if (!isValid) {
         setError('Certificate is invalid or has been revoked');
         setLoading(false);
         return;
       }
       
       setCertificate({
-        ...verifyRes.data.details,
-        cert_id: certId,
-        cert_hash: verifyRes.data.details.cert_hash_preview,
+        ...certData,
         verification_url: `${window.location.origin}/verify?id=${certId}`
       });
     } catch (err) {
@@ -47,7 +63,23 @@ export default function Certificate() {
     }, 100);
   };
 
-  // Format date safely without timezone shifts
+  // NEW: Handle PDF download via browser's native print-to-PDF
+  const handleDownload = () => {
+    // Temporarily update document title for better PDF filename
+    const originalTitle = document.title;
+    if (certificate) {
+      document.title = `${certificate.student_name.replace(/\s+/g, '_')}_Certificate`;
+    }
+    
+    // Trigger print dialog where user can select "Save as PDF"
+    window.print();
+    
+    // Restore original title after printing
+    setTimeout(() => {
+      document.title = originalTitle;
+    }, 1000);
+  };
+
   const formatDate = (dateStr) => {
     if (!dateStr) return '';
     const [year, month, day] = dateStr.split('-');
@@ -60,6 +92,8 @@ export default function Certificate() {
   };
 
   const isGrade12 = certificate?.certificate_type === 'grade12';
+  const institutionName = certificate?.institution_name || 'Unknown Institution';
+  const institutionCode = certificate?.institution_code || '';
 
   if (loading) {
     return (
@@ -80,10 +114,10 @@ export default function Certificate() {
           <h2 className="text-3xl font-bold text-gray-800 mb-3">Credential Not Valid</h2>
           <p className="text-gray-600 mb-6 text-lg">{error || 'This certificate ID is invalid or has been revoked.'}</p>
           <button
-            onClick={() => navigate('/verify')}
+            onClick={() => navigate('/admin/dashboard')}
             className="flex items-center gap-2 mx-auto text-blue-700 hover:text-blue-900 font-semibold text-lg"
           >
-            <ArrowLeft size={20} /> Back to Verification
+            <ArrowLeft size={20} /> Back to Dashboard
           </button>
         </div>
       </div>
@@ -92,7 +126,6 @@ export default function Certificate() {
 
   return (
     <>
-      {/* Print & Screen Styles */}
       <style>{`
         @media print {
           @page { size: A4 portrait; margin: 0mm; }
@@ -112,15 +145,24 @@ export default function Certificate() {
         }
       `}</style>
 
-      {/* Control Bar - Hidden in Print */}
+      {/* Control Bar - Hidden in Print/PDF */}
       <div className="max-w-5xl mx-auto mb-6 flex justify-between items-center no-print px-4 py-4">
         <button
-          onClick={() => navigate('/verify')}
+          onClick={() => navigate('/admin/dashboard')}
           className="flex items-center gap-2 text-gray-700 hover:text-blue-900 font-semibold px-4 py-2 rounded-lg hover:bg-white transition"
         >
-          <ArrowLeft size={18} /> Back to Verify
+          <ArrowLeft size={18} /> Back to Dashboard
         </button>
+        
+        {/* NEW: Download and Print Buttons */}
         <div className="flex gap-3">
+          <button
+            onClick={handleDownload}
+            className="flex items-center gap-2 px-5 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 font-semibold shadow-md transition"
+          >
+            <Download size={18} /> Download PDF
+          </button>
+          
           <button
             onClick={handlePrint}
             disabled={isPrinting}
@@ -152,11 +194,12 @@ export default function Certificate() {
             </div>
             
             <h1 className="text-4xl font-bold text-blue-900 tracking-widest uppercase mb-2">
-              {isGrade12 ? 'Examinations Council of Zambia' : 'University of Zambia'}
+              {institutionName}
             </h1>
             <div className="w-64 h-1 bg-gradient-to-r from-transparent via-yellow-600 to-transparent mx-auto my-3"></div>
             <p className="text-sm text-gray-600 italic tracking-wide">
-              {isGrade12 ? 'National Examination Board' : 'Excellence in Education Since 1966'}
+              {isGrade12 ? 'National Examination Board' : 'Academic Credential Registry'}
+              {institutionCode && ` | ${institutionCode}`}
             </p>
           </header>
 
@@ -202,10 +245,10 @@ export default function Certificate() {
                       </tr>
                     </thead>
                     <tbody>
-                      {(certificate.subjects || []).map((sub, i) => (
+                      {(certificate.metadata?.subjects || []).map((sub, i) => (
                         <tr key={i} className={i % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
                           <td className="py-3 px-6 border-b border-gray-200 font-mono text-sm">{sub.code}</td>
-                          <td className="py-3 px-6 border-b border-gray-200 text-sm">{sub.name || 'N/A'}</td>
+                          <td className="py-3 px-6 border-b border-gray-200 text-sm">{sub.name || sub.code}</td>
                           <td className="py-3 px-6 border-b border-gray-200 text-center font-bold text-blue-900">{sub.grade}</td>
                         </tr>
                       ))}
@@ -234,7 +277,7 @@ export default function Certificate() {
                   
                   <div className="inline-block px-8 py-3 bg-blue-50 border border-blue-200 rounded-full mt-4">
                     <p className="text-sm text-blue-900 font-semibold uppercase tracking-wider">
-                      Classification: {certificate.class_of_degree}
+                      Classification: {certificate.class_of_degree || certificate.metadata?.class_of_degree || 'Not Specified'}
                     </p>
                   </div>
                 </div>
@@ -261,10 +304,10 @@ export default function Certificate() {
                   </p>
                 </div>
                 <p className="font-bold text-gray-900 text-sm uppercase tracking-wide">
-                  {isGrade12 ? 'ECZ Board' : 'Prof. M. Mwanakatwe'}
+                  {isGrade12 ? 'ECZ Board' : 'Administration'}
                 </p>
                 <p className="text-xs text-gray-500 mt-1 font-sans">
-                  {isGrade12 ? 'Examinations Council' : 'University of Zambia'}
+                  {isGrade12 ? 'Examinations Council' : institutionName}
                 </p>
               </div>
 
@@ -291,10 +334,10 @@ export default function Certificate() {
                   </p>
                 </div>
                 <p className="font-bold text-gray-900 text-sm uppercase tracking-wide">
-                  {isGrade12 ? 'Dr. J. Mwamba' : 'Dr. S. Kapasa'}
+                  {isGrade12 ? 'Assessment Division' : 'Academic Affairs'}
                 </p>
                 <p className="text-xs text-gray-500 mt-1 font-sans">
-                  {isGrade12 ? 'Assessment Division' : 'Academic Affairs'}
+                  {isGrade12 ? 'ECZ' : institutionName}
                 </p>
               </div>
             </div>
