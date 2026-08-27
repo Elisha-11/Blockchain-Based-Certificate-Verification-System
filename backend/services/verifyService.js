@@ -1,197 +1,237 @@
+// backend/services/verifyService.js
 const certRepo = require('../repositories/certificateRepository');
 const logRepo = require('../repositories/logRepository');
-const pool = require('../config/db');
 const { generateDeterministicHash } = require('../utils/crypto');
 const { ethers } = require('ethers');
+const { contract, provider, CONTRACT_ADDRESS } = require('../config/blockchain');
 
 /**
- * Helper: Convert MySQL date to YYYY-MM-DD string for consistent hashing.
- * @param {Date|string} date 
- * @returns {string}
+ * STRATEGY PATTERN: Type-specific detail formatting.
+ * OCP: Add new certificate types by adding entries to this map.
  */
-const formatDate = (date) => {
-  if (!date) return '';
-  // Since repository now returns raw strings via CAST AS CHAR, 
-  // this primarily handles edge cases or direct object usage
-  if (typeof date === 'string') return date.trim();
-  if (date instanceof Date) {
-    return date.toISOString().split('T')[0];
-  }
-  return String(date).trim();
+const DETAIL_STRATEGIES = {
+  grade12: (cert, metadata) => ({
+    candidate_number: cert.candidate_number,
+    exam_year: metadata.exam_year || null,
+    subjects: metadata.subjects || [],
+    institution_name: cert.institution_name,
+    institution_code: cert.institution_code
+  }),
+  university: (cert, metadata) => ({
+    program: cert.program,
+    class_of_degree: metadata.class_of_degree || 'Not Specified',
+    student_id: cert.student_id,
+    institution_name: cert.institution_name,
+    institution_code: cert.institution_code
+  }),
+  technical: (cert, metadata) => ({
+    program: cert.program,
+    diploma_type: metadata.diploma_type || 'Not Specified',
+    student_id: cert.student_id,
+    institution_name: cert.institution_name,
+    institution_code: cert.institution_code
+  })
 };
 
 /**
- * Helper: Safely parse JSON metadata from the database.
- * @param {string|Object} metadata 
- * @returns {Object}
+ * PURE FUNCTION: Constructs hash input deterministically.
+ * ✅ FIXED: Extracts class_of_degree to top-level to match issuance hash structure exactly.
  */
-const parseMetadata = (metadata) => {
-  if (!metadata) return {};
-  if (typeof metadata === 'string') {
-    try {
-      return JSON.parse(metadata);
-    } catch (error) {
-      console.error('[VerifyService] Failed to parse metadata JSON:', error.message);
-      return {};
+const buildVerificationHashInput = (cert, metadata) => {
+  let normalizedDate = '';
+  
+  if (cert.issue_date) {
+    // TIER 1: Handle native Date objects directly (MySQL default)
+    if (cert.issue_date instanceof Date) {
+      const yyyy = cert.issue_date.getFullYear();
+      const mm = String(cert.issue_date.getMonth() + 1).padStart(2, '0');
+      const dd = String(cert.issue_date.getDate()).padStart(2, '0');
+      normalizedDate = `${yyyy}-${mm}-${dd}`;
+    } 
+    // TIER 2: Handle ISO format strings ("2026-08-26T00:00:00.000Z")
+    else if (typeof cert.issue_date === 'string' && /^\d{4}-\d{2}-\d{2}/.test(cert.issue_date)) {
+      normalizedDate = cert.issue_date.substring(0, 10);
+    } 
+    // TIER 3: Parse any other string format via Date constructor fallback
+    else {
+      try {
+        const d = new Date(cert.issue_date);
+        if (!isNaN(d.getTime())) {
+          const yyyy = d.getFullYear();
+          const mm = String(d.getMonth() + 1).padStart(2, '0');
+          const dd = String(d.getDate()).padStart(2, '0');
+          normalizedDate = `${yyyy}-${mm}-${dd}`;
+        } else {
+          normalizedDate = String(cert.issue_date).substring(0, 10);
+        }
+      } catch (e) {
+        normalizedDate = String(cert.issue_date).substring(0, 10);
+      }
     }
   }
-  return metadata;
+
+  // ✅ CRITICAL FIX: Mirror exact structure used during issuance
+  return {
+    cert_id: String(cert.cert_id || '').trim(),
+    certificate_type: String(cert.certificate_type || 'university').trim().toLowerCase(),
+    student_name: String(cert.student_name || '').trim().toLowerCase(),
+    institution_id: String(cert.institution_id || '').trim(),
+    issue_date: normalizedDate,
+    candidate_number: cert.candidate_number 
+      ? String(cert.candidate_number).trim() 
+      : null,
+    program: cert.program 
+      ? String(cert.program).trim() 
+      : null,
+    class_of_degree: metadata?.class_of_degree || null, // ✅ MOVED TO TOP LEVEL
+    metadata: {} // ✅ ALWAYS EMPTY FOR UNIVERSITY CERTS TO MATCH ISSUANCE
+  };
 };
 
-/**
- * Verifies a certificate against the database and blockchain.
- * @param {string} cert_id 
- * @param {Object} context - Contains verifier_ip and user_agent
- * @returns {Object} Verification result
- */
-exports.verifyCertificate = async (cert_id, context = {}) => {
-  console.log('[VerifyService] Initiating verification for:', cert_id);
-  
-  // 1. Fetch certificate and institution details using a JOIN
-  const [rows] = await pool.query(
-    `SELECT c.*, i.name as institution_name, i.code as institution_code 
-     FROM certificates c 
-     LEFT JOIN institutions i ON c.institution_id = i.institution_id 
-     WHERE c.cert_id = ?`,
-    [cert_id]
-  );
+class VerificationService {
+  constructor(certificateRepository = certRepo, loggingRepository = logRepo) {
+    this.certRepo = certificateRepository;
+    this.logRepo = loggingRepository;
+  }
 
-  const cert = rows[0];
+  async verifyCertificate(certId, context = {}) {
+    console.log('[VerifyService] Initiating verification for:', certId);
 
-  if (!cert) {
-    await logRepo.create({ 
-      cert_id, 
-      verifier_ip: context.verifier_ip, 
-      result: 'not_found', 
-      user_agent: context.user_agent 
-    });
-    return { 
-      valid: false, 
-      status: 'NOT_FOUND', 
-      cert_id, 
-      message: 'Certificate not found in the national registry.' 
+    // 1. Fetch via Repository (GRASP Information Expert)
+    const cert = await this.certRepo.findByIdWithInstitution(certId);
+
+    if (!cert) {
+      await this._logVerification(certId, context, 'not_found');
+      return {
+        valid: false,
+        status: 'NOT_FOUND',
+        cert_id: certId,
+        message: 'Certificate not found in the national registry.'
+      };
+    }
+
+    // 2. Parse metadata safely
+    const metadata = this._safeParseMetadata(cert.metadata);
+
+    // 3. Recompute hash using strict normalization
+    const hashInput = buildVerificationHashInput(cert, metadata);
+    const recomputedHash = generateDeterministicHash(hashInput);
+
+    // Debug logging to identify mismatch source
+    console.log('[VerifyService] Hash Input:', JSON.stringify(hashInput));
+    console.log('[VerifyService] Stored Hash:   ', cert.cert_hash);
+    console.log('[VerifyService] Recomputed:    ', recomputedHash);
+    console.log('[VerifyService] DB Match:      ', recomputedHash === cert.cert_hash);
+
+    // 4. Check MySQL integrity
+    const mysqlHashMatches = recomputedHash === cert.cert_hash;
+
+    // 5. Check Blockchain with defensive adapter check
+    const blockchainResult = await this._verifyOnBlockchain(cert.cert_id, cert.cert_hash);
+
+    // 6. Determine final status
+    const status = this._determineStatus(
+      cert.status,
+      mysqlHashMatches,
+      blockchainResult.verified,
+      blockchainResult.error
+    );
+
+    // 7. Log audit trail
+    await this._logVerification(certId, context, status.result);
+
+    // 8. Format details via strategy (OCP)
+    const detailStrategy = DETAIL_STRATEGIES[cert.certificate_type] || DETAIL_STRATEGIES.university;
+    const details = detailStrategy(cert, metadata);
+
+    return {
+      valid: status.result === 'valid',
+      status: status.result.toUpperCase(),
+      certificate_type: cert.certificate_type || 'university',
+      cert_id: cert.cert_id,
+      message: status.message,
+      details,
+      verification: {
+        mysql_hash_match: mysqlHashMatches,
+        blockchain_verified: blockchainResult.verified,
+        blockchain_error: blockchainResult.error
+      }
     };
   }
 
-  // 2. Parse metadata and construct the exact hash input object
-  const metadata = parseMetadata(cert.metadata);
-  
-  const hashInput = {
-    cert_id: String(cert.cert_id || '').trim(),
-    certificate_type: cert.certificate_type || 'university',
-    student_name: String(cert.student_name || '').trim(),
-    institution_id: String(cert.institution_id || '').trim(),
-    issue_date: formatDate(cert.issue_date),
-    candidate_number: cert.candidate_number ? String(cert.candidate_number).trim() : null,
-    program: cert.program ? String(cert.program).trim() : null,
-    metadata: metadata
-  };
+  // --- PRIVATE HELPER METHODS (SRP Separation) ---
 
-  console.log('[VerifyService] Hash input constructed:', hashInput);
+  _safeParseMetadata(metadata) {
+    if (!metadata) return {};
+    if (typeof metadata === 'string') {
+      try { return JSON.parse(metadata); }
+      catch (e) {
+        console.error('[VerifyService] Metadata parse failed:', e.message);
+        return {};
+      }
+    }
+    return metadata;
+  }
 
-  // 3. Recompute hash using the deterministic method
-  const recomputedHash = generateDeterministicHash(hashInput);
+  async _verifyOnBlockchain(certId, storedHash) {
+    if (!contract || !provider || !CONTRACT_ADDRESS) {
+      return { verified: false, error: 'Blockchain adapter not initialized' };
+    }
 
-  console.log('[VerifyService] Recomputed hash:', recomputedHash);
-  console.log('[VerifyService] Stored hash:    ', cert.cert_hash);
-  console.log('[VerifyService] DB Match:       ', recomputedHash === cert.cert_hash);
-
-  // 4. Check MySQL hash match
-  const mysqlHashMatches = recomputedHash === cert.cert_hash;
-
-  // 5. Check Blockchain hash match with enhanced debugging
-  let blockchainVerified = false;
-  let blockchainError = null;
-
-  try {
-    console.log('[VerifyService] Checking blockchain for hash...');
-    
-    const { CONTRACT_ADDRESS, contract, provider } = require('../config/blockchain');
-    console.log('[VerifyService] Contract address:', CONTRACT_ADDRESS);
-
-    // DEBUGGING: Verify contract is actually deployed at this address
     try {
       const code = await provider.getCode(CONTRACT_ADDRESS);
-      console.log('[VerifyService] Contract code length:', code.length);
-      
       if (code === '0x') {
-        console.error('[VerifyService] FATAL: Contract address is empty (not deployed)');
         throw new Error('Contract not deployed at specified address');
       }
-    } catch (contractCheckErr) {
-      console.error('[VerifyService] Contract deployment check failed:', contractCheckErr.message);
-      throw contractCheckErr; // Re-throw to be caught by outer try-catch
+
+      const certIdBytes = ethers.id(certId);
+      const hashBytes = ethers.toBeArray('0x' + storedHash);
+      const result = await contract.verifyCertificate(certIdBytes, hashBytes);
+
+      return { verified: Boolean(result), error: null };
+    } catch (err) {
+      console.error('[VerifyService] Blockchain check failed:', err.message);
+      return { verified: false, error: err.message };
     }
-    
-    const certIdBytes = ethers.id(cert.cert_id);
-    const hashBytes = ethers.toBeArray('0x' + cert.cert_hash);
-    
-    const result = await contract.verifyCertificate(certIdBytes, hashBytes);
-    blockchainVerified = Boolean(result);
-    
-    console.log('[VerifyService] Blockchain verification result:', blockchainVerified);
-  } catch (err) {
-    console.error('[VerifyService] Blockchain check failed:', err.message);
-    console.error('[VerifyService] Error code:', err.code);
-    blockchainError = err.message;
   }
 
-  // 6. Determine final validity status
-  const isRevoked = cert.status === 'revoked';
-  let resultStatus, message;
-  
-  if (isRevoked) {
-    resultStatus = 'revoked';
-    message = 'This certificate has been officially revoked by the issuing institution.';
-  } else if (!mysqlHashMatches) {
-    resultStatus = 'invalid';
-    message = 'Certificate integrity check failed. Database hash mismatch indicates tampering.';
-  } else if (!blockchainVerified && !blockchainError) {
-    resultStatus = 'invalid';
-    message = 'Certificate hash not found on the blockchain registry.';
-  } else {
-    resultStatus = 'valid';
-    message = 'Certificate is authentic and verified on the blockchain.';
-  }
-
-  // 7. Log the verification attempt for audit trails
-  await logRepo.create({ 
-    cert_id, 
-    verifier_ip: context.verifier_ip, 
-    result: resultStatus, 
-    user_agent: context.user_agent 
-  });
-
-  // 8. Format the details payload based on certificate type
-  const details = {
-    student_name: cert.student_name,
-    institution_name: cert.institution_name || 'Unknown Institution',
-    institution_code: cert.institution_code || 'N/A',
-    issue_date: formatDate(cert.issue_date),
-    cert_hash_preview: cert.cert_hash.substring(0, 16) + '...'
-  };
-
-  if (cert.certificate_type === 'grade12') {
-    details.candidate_number = cert.candidate_number;
-    details.subjects = metadata.subjects || [];
-  } else {
-    // Default to university or technical certificates
-    details.program = cert.program;
-    details.class_of_degree = metadata.class_of_degree || 'Not Specified';
-  }
-
-  // 9. Return the final structured response
-  return {
-    valid: resultStatus === 'valid',
-    status: resultStatus.toUpperCase(),
-    certificate_type: cert.certificate_type || 'university',
-    cert_id: cert.cert_id,
-    message,
-    details,
-    verification: {
-      mysql_hash_match: mysqlHashMatches,
-      blockchain_verified: blockchainVerified,
-      blockchain_error: blockchainError
+  _determineStatus(dbStatus, mysqlMatch, blockchainVerified, blockchainError) {
+    if (dbStatus === 'revoked') {
+      return {
+        result: 'revoked',
+        message: 'This certificate has been officially revoked by the issuing institution.'
+      };
     }
-  };
-};
+    if (!mysqlMatch) {
+      return {
+        result: 'invalid',
+        message: 'Certificate integrity check failed. Database hash mismatch indicates tampering.'
+      };
+    }
+    if (!blockchainVerified && !blockchainError) {
+      return {
+        result: 'invalid',
+        message: 'Certificate hash not found on the blockchain registry.'
+      };
+    }
+    return {
+      result: 'valid',
+      message: 'Certificate is authentic and verified on the blockchain.'
+    };
+  }
+
+  async _logVerification(certId, context, result) {
+    try {
+      await this.logRepo.create({
+        cert_id: certId,
+        verifier_ip: context.verifier_ip,
+        result,
+        user_agent: context.user_agent
+      });
+    } catch (logErr) {
+      console.error('[VerifyService] Audit log failed:', logErr.message);
+    }
+  }
+}
+
+module.exports = new VerificationService();
