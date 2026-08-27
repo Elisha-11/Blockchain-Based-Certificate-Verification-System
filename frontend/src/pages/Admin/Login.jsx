@@ -5,16 +5,25 @@ import api from '../../services/api';
 export default function Login() {
   const [email, setEmail] = useState('admin@unza.zm');
   const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
   const handleLogin = async (e) => {
     e.preventDefault();
+    setLoading(true);
+    
     try {
       const res = await api.post('/auth/login', { email, password });
-      localStorage.setItem('token', res.data.token);
+      
+      // ✅ CRITICAL FIX: Must match key used in Home.jsx and api.js
+      localStorage.setItem('jwt_token', res.data.token);
+      
       navigate('/admin/dashboard');
     } catch (error) {
+      console.error('Login error:', error.response?.data || error.message);
       alert('Login failed: ' + (error.response?.data?.error || 'Invalid credentials'));
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -31,6 +40,7 @@ export default function Login() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
+              disabled={loading}
             />
           </div>
           <div>
@@ -41,13 +51,17 @@ export default function Login() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
+              disabled={loading}
             />
           </div>
           <button 
             type="submit" 
-            className="w-full bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 font-semibold"
+            disabled={loading}
+            className={`w-full bg-blue-600 text-white p-3 rounded-lg font-semibold transition-colors ${
+              loading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-700'
+            }`}
           >
-            Login
+            {loading ? 'Logging in...' : 'Login'}
           </button>
         </div>
       </form>
