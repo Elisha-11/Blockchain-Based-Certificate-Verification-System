@@ -2,7 +2,7 @@ import { useState } from 'react';
 import api from '../../services/api';
 import { CheckCircle, XCircle, Plus, Trash2, Loader2 } from 'lucide-react';
 
-export default function Issue() {
+export default function CertificateIssuanceForm({ onIssued }) {
   const [type, setType] = useState('university');
   const [loading, setLoading] = useState(false);
   const [response, setResponse] = useState(null);
@@ -29,7 +29,7 @@ export default function Issue() {
 
   const handleSubjectChange = (index, field, value) => {
     const updatedSubjects = [...subjects];
-    updatedSubjects[index][field] = value.toUpperCase(); // Auto-uppercase subject codes
+    updatedSubjects[index][field] = value.toUpperCase();
     setSubjects(updatedSubjects);
   };
 
@@ -50,7 +50,6 @@ export default function Issue() {
     setResponse(null);
 
     try {
-      // Construct base payload
       const payload = {
         certificate_type: type,
         student_name: formData.student_name.trim(),
@@ -58,14 +57,12 @@ export default function Issue() {
         issue_date: formData.issue_date
       };
 
-      // Append type-specific fields
       if (type === 'university') {
         payload.student_id = formData.student_id.trim() || null;
         payload.program = formData.program.trim();
         payload.class_of_degree = formData.class_of_degree;
       } else if (type === 'grade12') {
         payload.candidate_number = formData.candidate_number.trim();
-        // Filter out empty subject rows
         payload.subjects = subjects.filter(s => s.code.trim() && s.grade.trim());
         
         if (payload.subjects.length === 0) {
@@ -77,8 +74,19 @@ export default function Issue() {
       setResponse(res.data);
       
       // Reset form on success
-      setFormData({ ...formData, student_name: '', program: '', candidate_number: '' });
+      setFormData({ 
+        ...formData, 
+        student_name: '', 
+        program: '', 
+        candidate_number: '',
+        class_of_degree: ''
+      });
       setSubjects([{ code: '', grade: '' }]);
+      
+      // ✅ CRITICAL FIX: Notify parent to switch back to list view after 1.5s
+      if (onIssued) {
+        setTimeout(() => onIssued(), 1500);
+      }
       
     } catch (err) {
       const errMsg = err.response?.data?.error || err.message || 'Failed to issue certificate';

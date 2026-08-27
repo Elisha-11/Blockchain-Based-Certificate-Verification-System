@@ -1,11 +1,100 @@
-import { Link } from 'react-router-dom';
-import { ShieldCheck, Zap, BadgeCheck, ArrowRight } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import CertificateList from '../components/Admin/CertificateList';
+import CertificateIssuanceForm from '../components/Admin/CertificateIssuanceForm';
+import { ShieldCheck, Zap, BadgeCheck, ArrowRight, LogOut, List, PlusCircle } from 'lucide-react';
 
 export default function Home() {
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [activeTab, setActiveTab] = useState('list');
+  const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const token = localStorage.getItem('jwt_token');
+    if (token) {
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        if (payload.role === 'institution_admin' || payload.role === 'super_admin') {
+          setIsAdmin(true);
+        } else {
+          localStorage.removeItem('jwt_token');
+        }
+      } catch (e) {
+        localStorage.removeItem('jwt_token');
+      }
+    }
+    setLoading(false);
+  }, []);
+
+  const handleLogout = () => {
+    localStorage.removeItem('jwt_token');
+    setIsAdmin(false);
+    navigate('/');
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-900 border-t-transparent"></div>
+      </div>
+    );
+  }
+
+  // ADMIN DASHBOARD VIEW
+  if (isAdmin) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <header className="bg-blue-900 text-white shadow-md sticky top-0 z-50">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex justify-between items-center">
+            <h1 className="text-xl font-bold flex items-center gap-2">
+              <ShieldCheck size={24} /> Academic Credential Registry
+            </h1>
+            <button 
+              onClick={handleLogout}
+              className="flex items-center gap-2 px-4 py-2 bg-red-600/90 hover:bg-red-700 rounded-lg text-sm font-semibold transition-colors"
+            >
+              Logout
+            </button>
+          </div>
+        </header>
+
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6">
+          <div className="flex gap-2 mb-6">
+            <button
+              onClick={() => setActiveTab('list')}
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium transition-colors ${
+                activeTab === 'list' ? 'bg-blue-900 text-white shadow-md' : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-300'
+              }`}
+            >
+              <List size={18} /> View Certificates
+            </button>
+            <button
+              onClick={() => setActiveTab('issue')}
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium transition-colors ${
+                activeTab === 'issue' ? 'bg-blue-900 text-white shadow-md' : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-300'
+              }`}
+            >
+              <PlusCircle size={18} /> Issue Certificate
+            </button>
+          </div>
+
+          <main>
+            {activeTab === 'list' ? (
+              <CertificateList />
+            ) : (
+              <CertificateIssuanceForm onIssued={() => setActiveTab('list')} />
+            )}
+          </main>
+        </div>
+      </div>
+    );
+  }
+
+  // PUBLIC LANDING PAGE VIEW
   return (
     <div className="min-h-[calc(100vh-8rem)] flex flex-col justify-center px-4 sm:px-6 lg:px-8 py-12 sm:py-16">
       <div className="max-w-5xl mx-auto text-center space-y-6 sm:space-y-8">
-        {/* Hero Section */}
         <div className="space-y-3 sm:space-y-4">
           <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-blue-900 leading-tight tracking-tight break-words">
             Blockchain Certificate Verification
@@ -16,7 +105,6 @@ export default function Home() {
           </p>
         </div>
 
-        {/* Call-to-Action Buttons */}
         <div className="flex flex-col sm:flex-row justify-center gap-3 sm:gap-4 px-4">
           <Link 
             to="/verify" 
@@ -33,7 +121,6 @@ export default function Home() {
           </Link>
         </div>
 
-        {/* Features Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mt-8 sm:mt-12">
           <FeatureCard 
             icon={<ShieldCheck size={28} className="text-blue-600" />}
@@ -56,7 +143,6 @@ export default function Home() {
   );
 }
 
-// Reusable Feature Card Component
 function FeatureCard({ icon, title, description }) {
   return (
     <div className="bg-white p-5 sm:p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md hover:border-blue-200 transition-all duration-300 text-center space-y-2">

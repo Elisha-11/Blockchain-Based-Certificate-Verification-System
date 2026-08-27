@@ -4,10 +4,7 @@ import Navbar from './components/Navbar';
 import Home from './pages/Home';
 import Verify from './pages/Verify';
 import Login from './pages/Admin/Login';
-import Dashboard from './pages/Admin/Dashboard';
-import Certificates from './pages/Admin/Certificates';
 import Certificate from './pages/Certificate';
-import AdminLayout from './components/AdminLayout';
 
 // UX Enhancement: Auto-scroll to top on route change
 function ScrollToTop() {
@@ -54,12 +51,11 @@ export default function App() {
           <Route path="/admin/login" element={<Login />} />
         </Route>
 
-        {/* Admin Routes - Use Dynamic AdminLayout */}
-        <Route path="/admin" element={<AdminLayout />}>
-          <Route index element={<Dashboard />} />
-          <Route path="dashboard" element={<Dashboard />} />
-          <Route path="certificates" element={<Certificates />} />
-        </Route>
+        {/* Admin Dashboard Route - Reuses Home component which handles auth check */}
+        <Route path="/admin/dashboard" element={<Home />} />
+        
+        {/* Individual Certificate View - No layout wrapper for print optimization */}
+        <Route path="/admin/certificates/:certId" element={<Certificate />} />
       </Routes>
     </Router>
   );
