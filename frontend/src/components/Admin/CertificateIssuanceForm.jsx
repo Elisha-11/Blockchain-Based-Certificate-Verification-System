@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import api from '../../services/api';
 import { CheckCircle, XCircle, Plus, Trash2, Loader2 } from 'lucide-react';
+import { CERTIFICATE_THEME } from '../../utils/certificateTheme';
 
 export default function CertificateIssuanceForm({ onIssued }) {
   const [type, setType] = useState('university');
@@ -18,7 +19,9 @@ export default function CertificateIssuanceForm({ onIssued }) {
     program: '',
     class_of_degree: '',
     // Grade 12 fields
-    candidate_number: ''
+    candidate_number: '',
+    // Technical diploma fields
+    diploma_type: ''
   });
 
   const [subjects, setSubjects] = useState([{ code: '', grade: '' }]);
@@ -64,22 +67,27 @@ export default function CertificateIssuanceForm({ onIssued }) {
       } else if (type === 'grade12') {
         payload.candidate_number = formData.candidate_number.trim();
         payload.subjects = subjects.filter(s => s.code.trim() && s.grade.trim());
-        
+
         if (payload.subjects.length === 0) {
           throw new Error('At least one subject with a grade is required for Grade 12 results.');
         }
+      } else if (type === 'technical') {
+        payload.program = formData.program.trim();
+        payload.diploma_type = formData.diploma_type.trim();
+        payload.student_id = formData.student_id.trim() || null;
       }
 
       const res = await api.post('/certificates', payload);
       setResponse(res.data);
       
       // Reset form on success
-      setFormData({ 
-        ...formData, 
-        student_name: '', 
-        program: '', 
+      setFormData({
+        ...formData,
+        student_name: '',
+        program: '',
         candidate_number: '',
-        class_of_degree: ''
+        class_of_degree: '',
+        diploma_type: ''
       });
       setSubjects([{ code: '', grade: '' }]);
       
@@ -110,29 +118,21 @@ export default function CertificateIssuanceForm({ onIssued }) {
           {/* Certificate Type Selector */}
           <div>
             <label className={labelClasses}>Credential Type</label>
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                type="button"
-                onClick={() => setType('university')}
-                className={`p-3 rounded-lg border-2 text-sm font-medium transition ${
-                  type === 'university' 
-                    ? 'border-blue-600 bg-blue-50 text-blue-700' 
-                    : 'border-gray-200 text-gray-600 hover:border-gray-300'
-                }`}
-              >
-                University Degree
-              </button>
-              <button
-                type="button"
-                onClick={() => setType('grade12')}
-                className={`p-3 rounded-lg border-2 text-sm font-medium transition ${
-                  type === 'grade12' 
-                    ? 'border-blue-600 bg-blue-50 text-blue-700' 
-                    : 'border-gray-200 text-gray-600 hover:border-gray-300'
-                }`}
-              >
-                Grade 12 Result
-              </button>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {['university', 'grade12', 'technical'].map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setType(t)}
+                  className={`p-3 rounded-lg border-2 text-sm font-medium transition ${
+                    type === t
+                      ? CERTIFICATE_THEME[t].selectorActive
+                      : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                  }`}
+                >
+                  {CERTIFICATE_THEME[t].label}
+                </button>
+              ))}
             </div>
           </div>
 
@@ -225,6 +225,24 @@ export default function CertificateIssuanceForm({ onIssued }) {
                     </div>
                   ))}
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* Dynamic Fields: Technical Diploma */}
+          {type === 'technical' && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-gray-100">
+              <div>
+                <label className={labelClasses}>Program of Study</label>
+                <input name="program" value={formData.program} onChange={handleChange} placeholder="e.g. Electrical Engineering" className={inputClasses} required />
+              </div>
+              <div>
+                <label className={labelClasses}>Diploma Type</label>
+                <input name="diploma_type" value={formData.diploma_type} onChange={handleChange} placeholder="e.g. Advanced Certificate" className={inputClasses} required />
+              </div>
+              <div className="sm:col-span-2">
+                <label className={labelClasses}>Student ID (UUID) - Optional</label>
+                <input name="student_id" value={formData.student_id} onChange={handleChange} className={`${inputClasses} font-mono text-xs`} />
               </div>
             </div>
           )}

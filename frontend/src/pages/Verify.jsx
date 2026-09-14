@@ -1,28 +1,45 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import api from '../services/api';
 import { ShieldCheck, AlertTriangle, Loader2, Building2 } from 'lucide-react';
 
 export default function Verify() {
-  const [certId, setCertId] = useState('');
+  const [searchParams] = useSearchParams();
+  const [certId, setCertId] = useState(searchParams.get('id') || '');
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  const handleVerify = async (e) => {
-    e.preventDefault();
+  const runVerification = useCallback(async (id) => {
     setLoading(true);
     setResult(null);
-    
+
     try {
-      const res = await api.post('/verify', { cert_id: certId });
+      const res = await api.post('/verify', { cert_id: id });
       setResult(res.data);
     } catch (error) {
-      setResult({ 
-        valid: false, 
-        status: 'ERROR', 
-        message: error.response?.data?.error || 'Verification failed. Please check the ID and try again.' 
+      setResult({
+        valid: false,
+        status: 'ERROR',
+        message: error.response?.data?.error || 'Verification failed. Please check the ID and try again.'
       });
     }
     setLoading(false);
+  }, []);
+
+  // Auto-run verification when the page is opened from a QR code
+  // (Certificate.jsx encodes the cert as /verify?id=<cert_id>) so scanning
+  // the code shows the result immediately instead of an empty form.
+  useEffect(() => {
+    const idFromQr = searchParams.get('id');
+    if (idFromQr) {
+      runVerification(idFromQr);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleVerify = (e) => {
+    e.preventDefault();
+    runVerification(certId);
   };
 
   return (
@@ -119,6 +136,17 @@ export default function Verify() {
                             </div>
                           ))}
                         </div>
+                      </div>
+                    </div>
+                  ) : result.certificate_type === 'technical' ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <span className="font-semibold text-gray-500 block text-xs uppercase tracking-wide">Program of Study</span>
+                        <p className="text-gray-900 font-medium mt-1">{result.details.program}</p>
+                      </div>
+                      <div>
+                        <span className="font-semibold text-gray-500 block text-xs uppercase tracking-wide">Diploma Type</span>
+                        <p className="text-gray-900 font-medium mt-1">{result.details.diploma_type}</p>
                       </div>
                     </div>
                   ) : (

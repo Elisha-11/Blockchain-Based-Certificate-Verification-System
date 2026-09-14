@@ -8,6 +8,12 @@ const loginSchema = z.object({
   password: z.string().min(1)
 });
 
+const registerSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(8, 'Password must be at least 8 characters'),
+  full_name: z.string().min(2, 'Full name is required').trim()
+});
+
 exports.login = async (req, res) => {
   try {
     const { email, password } = loginSchema.parse(req.body);
@@ -76,26 +82,39 @@ exports.login = async (req, res) => {
   }
 };
 
+/**
+ * Public self-registration.
+ *
+ * SECURITY: This endpoint is unauthenticated by design (anyone can create an
+ * account to use the public verification portal), so it must NEVER trust a
+ * caller-supplied role or institution_id — doing so previously let any caller
+ * register as 'super_admin' and gain full administrative access. Every account
+ * created here is hardcoded to the lowest-privilege role with no institution
+ * affiliation. Institution admin / super admin accounts can only be created by
+ * an already-authenticated admin via POST /api/admin/users (adminController.createUser).
+ */
 exports.register = async (req, res) => {
   try {
-    const { email, password, full_name, role = 'verifier', institution_id = null } = req.body;
-    
-    // Hash password
+    const { email, password, full_name } = registerSchema.parse(req.body);
+
     const password_hash = await bcrypt.hash(password, 10);
-    
-    // Insert user
+
     const [result] = await pool.query(
       'INSERT INTO users (email, password_hash, full_name, role, institution_id) VALUES (?, ?, ?, ?, ?)',
-      [email, password_hash, full_name, role, institution_id]
+      [email, password_hash, full_name, 'verifier', null]
     );
-    
-    res.status(201).json({ 
-      success: true, 
-      message: 'User registered', 
-      userId: result.insertId 
+
+    res.status(201).json({
+      success: true,
+      message: 'User registered',
+      userId: result.insertId
     });
   } catch (err) {
     console.error('Register error:', err);
+
+    if (err instanceof z.ZodError) {
+      return res.status(400).json({ error: err.errors[0].message });
+    }
     if (err.code === 'ER_DUP_ENTRY') {
       return res.status(409).json({ error: 'Email already registered' });
     }

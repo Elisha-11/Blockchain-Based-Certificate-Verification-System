@@ -1,13 +1,26 @@
 const { ethers } = require('ethers');
 const fs = require('fs');
 const path = require('path');
+require('dotenv').config();
 
-// CORRECT DEPLOYED ADDRESS
-const CONTRACT_ADDRESS = '0x27AA333D9b31Ba984259CF09a2cBB26276F3341E';
-const RPC_URL = 'http://127.0.0.1:8545';
+// Read from environment so the same code works against local Ganache (dev) or a
+// public testnet like Sepolia (deployment) just by changing .env — a hardcoded
+// 127.0.0.1 RPC URL / private key can never be reached once this backend is
+// hosted somewhere other than the developer's own machine.
+const CONTRACT_ADDRESS = process.env.CONTRACT_ADDRESS;
+const RPC_URL = process.env.BLOCKCHAIN_RPC_URL || 'http://127.0.0.1:8545';
 
-// TEMPORARY: Paste raw key here. We will sanitize it below.
-const RAW_KEY_INPUT = '0x8724e239869897ce5589b2ac82203173c5a81370ab96f14156adb10c4ff2c150';
+if (!CONTRACT_ADDRESS) {
+  console.error('FATAL: CONTRACT_ADDRESS is not set in the environment');
+  process.exit(1);
+}
+
+const RAW_KEY_INPUT = process.env.BLOCKCHAIN_PRIVATE_KEY;
+
+if (!RAW_KEY_INPUT) {
+  console.error('FATAL: BLOCKCHAIN_PRIVATE_KEY is not set in the environment');
+  process.exit(1);
+}
 
 // SANITIZE: Multi-step approach to handle invisible chars, padding, etc.
 // 1. Trim all whitespace (spaces, tabs, newlines, zero-width chars)

@@ -15,6 +15,7 @@ app.use('/api/certificates', require('./routes/certificateRoutes'));
 app.use('/api/verify', require('./routes/verifyRoutes'));
 // ADD THIS LINE: Register institution routes
 app.use('/api/institutions', require('./routes/institutionRoutes'));
+app.use('/api/admin', require('./routes/adminRoutes'));
 
 // Health check
 app.get('/api/health', async (req, res) => {

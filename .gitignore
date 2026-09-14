@@ -1,1 +1,11 @@
 node_modules
+
+# Secrets — never commit real credentials. Copy the matching .env.example
+# in each package and fill in real values locally / in your hosting platform's
+# env var settings instead.
+.env
+.env.local
+backend/.env
+blockchain/.env
+frontend/.env
+frontend/.env.local

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom'; // ✅ ADDED IMPORT
-import axios from 'axios';
+import api from '../../services/api';
+import { getCertificateTheme } from '../../utils/certificateTheme';
 
 const CertificateList = () => {
   const [certs, setCerts] = useState([]);
@@ -13,7 +14,6 @@ const CertificateList = () => {
   const [statusFilter, setStatusFilter] = useState('all');
   const [actionLoading, setActionLoading] = useState(null);
 
-  const API_BASE = 'http://127.0.0.1:5000/api';
   const token = localStorage.getItem('jwt_token');
 
   const fetchCerts = async (page = 1) => {
@@ -37,9 +37,7 @@ const CertificateList = () => {
         ...(statusFilter !== 'all' && { status: statusFilter })
       });
 
-      const res = await axios.get(`${API_BASE}/certificates/my-institution?${params}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const res = await api.get(`/certificates/my-institution?${params}`);
 
       const certificates = res.data?.certificates || [];
       setCerts(certificates);
@@ -67,9 +65,7 @@ const CertificateList = () => {
     if (!window.confirm('Retry blockchain registration for this certificate?')) return;
     setActionLoading(certId);
     try {
-      await axios.post(`${API_BASE}/certificates/${certId}/retry-blockchain`, {}, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      await api.post(`/certificates/${certId}/retry-blockchain`);
       alert('Blockchain retry initiated successfully');
       fetchCerts(pagination.page);
     } catch (err) {
@@ -87,10 +83,7 @@ const CertificateList = () => {
     }
     setActionLoading(certId);
     try {
-      await axios.post(`${API_BASE}/certificates/${certId}/revoke`, 
-        { reason: reason.trim() }, 
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      await api.post(`/certificates/${certId}/revoke`, { reason: reason.trim() });
       alert('Certificate revoked successfully');
       fetchCerts(pagination.page);
     } catch (err) {
@@ -176,7 +169,17 @@ const CertificateList = () => {
                   </Link>
                 </td>
                 
-                <td className="p-3 capitalize">{cert.certificate_type.replace('_', ' ')}</td>
+                <td className="p-3">
+                  {(() => {
+                    const typeTheme = getCertificateTheme(cert.certificate_type);
+                    const TypeIcon = typeTheme.icon;
+                    return (
+                      <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium ${typeTheme.badge}`}>
+                        <TypeIcon size={12} /> {typeTheme.label}
+                      </span>
+                    );
+                  })()}
+                </td>
                 <td className="p-3 text-sm">
                   {cert.certificate_type === 'grade12' 
                     ? `${cert.candidate_number} - ${getSubjectCount(cert.metadata)} subjects`
