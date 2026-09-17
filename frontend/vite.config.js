@@ -3,6 +3,12 @@ import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
+  server: {
+    host: true,
+    // Quick Tunnel hostnames are random per run; allow the whole trycloudflare.com
+    // domain rather than hardcoding one subdomain that changes on every restart.
+    allowedHosts: ['.trycloudflare.com']
+  },
   plugins: [
     react(),
     VitePWA({

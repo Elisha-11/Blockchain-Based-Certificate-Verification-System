@@ -60,10 +60,23 @@ const issueSchema = z.discriminatedUnion('certificate_type', [
 exports.issue = async (req, res) => {
   try {
     console.log('[CertificateController] Issuance request:', req.body);
-    
+
     const data = issueSchema.parse(req.body);
     console.log('[CertificateController] Validated type:', data.certificate_type);
-    
+
+    // SECURITY / DATA INTEGRITY: an institution_admin can only ever issue on
+    // behalf of their OWN institution — never trust institution_id from the
+    // request body for them, regardless of what the client form sent. This was
+    // previously unchecked, so certificates could silently be (mis)attributed
+    // to any institution_id the client happened to submit.
+    if (req.user.role === 'institution_admin') {
+      data.institution_id = req.user.institutionId;
+    }
+
+    if (!data.institution_id) {
+      return res.status(400).json({ error: 'No institution associated with this account' });
+    }
+
     const result = await certService.issueCertificate(data);
     
     if (!result?.cert_id) {
@@ -238,11 +251,51 @@ exports.revokeCertificate = async (req, res) => {
     if (cert.status === 'revoked') {
       return res.status(409).json({ error: 'Certificate already revoked' });
     }
+    if (cert.status === 'pending_revocation') {
+      return res.status(409).json({ error: 'Revocation already in progress' });
+    }
+    if (cert.status === 'revocation_failed') {
+      return res.status(409).json({ error: 'A previous revocation attempt failed. Use the retry-revocation endpoint instead.' });
+    }
 
     const result = await certService.revokeCertificate(id, req.user.userId, reason.trim());
     res.json(result);
   } catch (err) {
     console.error('[CertificateController] Revocation failed:', err.message);
     res.status(500).json({ error: 'Revocation failed', details: err.message });
+  }
+};
+
+/**
+ * POST /api/certificates/:id/retry-revocation
+ * Retries the blockchain revocation transaction for a certificate stuck in
+ * 'revocation_failed'. Mirrors retry-blockchain.
+ */
+exports.retryRevocation = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const cert = await certService.repository.findByIdRaw(id);
+    if (!cert) {
+      return res.status(404).json({ error: 'Certificate not found' });
+    }
+
+    if (cert.institution_id !== req.user.institutionId && req.user.role !== 'super_admin') {
+      return res.status(403).json({ error: 'Access denied: Certificate belongs to different institution' });
+    }
+
+    const result = await certService.retryRevocation(id);
+    res.json(result);
+  } catch (err) {
+    console.error('[CertificateController] Retry revocation failed:', err.message);
+
+    if (err.message.includes('not found')) {
+      return res.status(404).json({ error: err.message });
+    }
+    if (err.message.includes('Cannot retry')) {
+      return res.status(409).json({ error: err.message });
+    }
+
+    res.status(500).json({ error: 'Revocation retry failed', details: err.message });
   }
 };

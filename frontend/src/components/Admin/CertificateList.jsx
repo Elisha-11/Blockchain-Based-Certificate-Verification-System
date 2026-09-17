@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom'; // ✅ ADDED IMPORT
+import { QRCodeSVG } from 'qrcode.react';
+import { QrCode, X } from 'lucide-react';
 import api from '../../services/api';
 import { getCertificateTheme } from '../../utils/certificateTheme';
 
@@ -13,6 +15,7 @@ const CertificateList = () => {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [actionLoading, setActionLoading] = useState(null);
+  const [qrCert, setQrCert] = useState(null);
 
   const token = localStorage.getItem('jwt_token');
 
@@ -188,6 +191,13 @@ const CertificateList = () => {
                 <td className="p-3"><span className={getStatusBadge(cert.status)}>{cert.status.replace('_', ' ')}</span></td>
                 <td className="p-3 text-sm">{cert.issue_date}</td>
                 <td className="p-3 space-x-2">
+                  <button
+                    onClick={() => setQrCert(cert)}
+                    title="Show QR code"
+                    className="inline-flex items-center text-gray-500 hover:text-blue-700"
+                  >
+                    <QrCode size={16} />
+                  </button>
                   {cert.status === 'blockchain_failed' && (
                     <button 
                       onClick={() => handleRetry(cert.cert_id)}
@@ -235,6 +245,42 @@ const CertificateList = () => {
           >
             Next
           </button>
+        </div>
+      )}
+
+      {qrCert && (
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+          onClick={() => setQrCert(null)}
+        >
+          <div
+            className="bg-white rounded-lg shadow-xl p-6 max-w-xs w-full text-center relative"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => setQrCert(null)}
+              className="absolute top-3 right-3 text-gray-400 hover:text-gray-700"
+            >
+              <X size={18} />
+            </button>
+            <h3 className="font-semibold text-gray-900 mb-4">{qrCert.student_name}</h3>
+            <div className="inline-block bg-white p-2 rounded border border-gray-200">
+              <QRCodeSVG
+                value={`${window.location.origin}/verify?id=${qrCert.cert_id}`}
+                size={160}
+                bgColor="#ffffff"
+                fgColor="#1e3a8a"
+                level="H"
+              />
+            </div>
+            <p className="text-xs font-mono text-gray-500 break-all mt-3">{qrCert.cert_id}</p>
+            <Link
+              to={`/admin/certificates/${qrCert.cert_id}`}
+              className="inline-block mt-4 text-sm font-medium text-blue-700 hover:text-blue-900 hover:underline"
+            >
+              Open Full Certificate →
+            </Link>
+          </div>
         </div>
       )}
     </div>

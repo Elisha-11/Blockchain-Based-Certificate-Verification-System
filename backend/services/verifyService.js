@@ -34,6 +34,15 @@ const DETAIL_STRATEGIES = {
 };
 
 /**
+ * Truncates the full cert_hash for display, so the verification page can
+ * show a trust signal without dumping the entire raw hash on the page.
+ */
+const formatHashPreview = (hash) => {
+  if (!hash) return null;
+  return hash.length <= 18 ? hash : `${hash.slice(0, 10)}...${hash.slice(-8)}`;
+};
+
+/**
  * PURE FUNCTION: Constructs hash input deterministically.
  * ✅ FIXED: Extracts class_of_degree to top-level to match issuance hash structure exactly.
  */
@@ -129,20 +138,37 @@ class VerificationService {
     // 5. Check Blockchain with defensive adapter check
     const blockchainResult = await this._verifyOnBlockchain(cert.cert_id, cert.cert_hash);
 
-    // 6. Determine final status
+    // Revocation disagreement between MySQL and the chain — same spirit as
+    // the hash-mismatch debug block above: surfaced via server log only, no
+    // new DB column/enum and no change to the response shape.
+    if (!blockchainResult.error && (cert.status === 'revoked') !== blockchainResult.revoked) {
+      console.warn(
+        '[VerifyService] REVOCATION STATUS MISMATCH for', certId,
+        '- DB status:', cert.status,
+        '| on-chain revoked:', blockchainResult.revoked
+      );
+    }
+
+    // 6. Determine final status (on-chain revoked flag is now the source of
+    // truth; DB status is only a fallback if the chain call itself errored)
     const status = this._determineStatus(
       cert.status,
       mysqlHashMatches,
-      blockchainResult.verified,
-      blockchainResult.error
+      blockchainResult
     );
 
     // 7. Log audit trail
     await this._logVerification(certId, context, status.result);
 
-    // 8. Format details via strategy (OCP)
+    // 8. Format details via strategy (OCP), plus fields common to every
+    // certificate type that the verification result page always displays.
     const detailStrategy = DETAIL_STRATEGIES[cert.certificate_type] || DETAIL_STRATEGIES.university;
-    const details = detailStrategy(cert, metadata);
+    const details = {
+      student_name: cert.student_name,
+      issue_date: cert.issue_date,
+      cert_hash_preview: formatHashPreview(cert.cert_hash),
+      ...detailStrategy(cert, metadata)
+    };
 
     return {
       valid: status.result === 'valid',
@@ -153,8 +179,13 @@ class VerificationService {
       details,
       verification: {
         mysql_hash_match: mysqlHashMatches,
-        blockchain_verified: blockchainResult.verified,
-        blockchain_error: blockchainResult.error
+        blockchain_verified: blockchainResult.exists,
+        blockchain_error: blockchainResult.error,
+        // Cryptographic proof of which wallet actually registered this
+        // certificate on-chain — only meaningful once the chain confirms a
+        // matching record exists, so it's null otherwise rather than showing
+        // a stale/zero address.
+        blockchain_issuer: blockchainResult.exists ? blockchainResult.issuer : null
       }
     };
   }
@@ -175,7 +206,7 @@ class VerificationService {
 
   async _verifyOnBlockchain(certId, storedHash) {
     if (!contract || !provider || !CONTRACT_ADDRESS) {
-      return { verified: false, error: 'Blockchain adapter not initialized' };
+      return { exists: false, revoked: false, error: 'Blockchain adapter not initialized' };
     }
 
     try {
@@ -188,27 +219,43 @@ class VerificationService {
       const hashBytes = ethers.toBeArray('0x' + storedHash);
       const result = await contract.verifyCertificate(certIdBytes, hashBytes);
 
-      return { verified: Boolean(result), error: null };
+      return {
+        exists: Boolean(result.exists),
+        revoked: Boolean(result.revoked),
+        issuer: result.issuer,
+        issuedAt: result.issuedAt,
+        revokedAt: result.revokedAt,
+        error: null
+      };
     } catch (err) {
       console.error('[VerifyService] Blockchain check failed:', err.message);
-      return { verified: false, error: err.message };
+      return { exists: false, revoked: false, error: err.message };
     }
   }
 
-  _determineStatus(dbStatus, mysqlMatch, blockchainVerified, blockchainError) {
-    if (dbStatus === 'revoked') {
-      return {
-        result: 'revoked',
-        message: 'This certificate has been officially revoked by the issuing institution.'
-      };
-    }
+  _determineStatus(dbStatus, mysqlMatch, blockchainResult) {
     if (!mysqlMatch) {
       return {
         result: 'invalid',
         message: 'Certificate integrity check failed. Database hash mismatch indicates tampering.'
       };
     }
-    if (!blockchainVerified && !blockchainError) {
+
+    // The chain is authoritative for revocation status. Only fall back to
+    // the DB flag when the chain itself couldn't be reached — the same
+    // graceful-degradation behavior this service already applies below when
+    // deciding whether a blockchain error should block verification.
+    const revoked = blockchainResult.error
+      ? dbStatus === 'revoked'
+      : blockchainResult.revoked;
+
+    if (revoked) {
+      return {
+        result: 'revoked',
+        message: 'This certificate has been officially revoked by the issuing institution.'
+      };
+    }
+    if (!blockchainResult.exists && !blockchainResult.error) {
       return {
         result: 'invalid',
         message: 'Certificate hash not found on the blockchain registry.'

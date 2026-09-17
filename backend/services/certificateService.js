@@ -1,9 +1,23 @@
 // backend/services/certificateService.js
 const certRepo = require('../repositories/certificateRepository');
+const institutionRepo = require('../repositories/institutionRepository');
 const { generateDeterministicHash } = require('../utils/crypto');
 const { buildCertificateHashInput } = require('../utils/hashBuilder');
-const { contract, provider } = require('../config/blockchain');
+const { provider, getSignerForInstitution } = require('../config/blockchain');
 const { ethers } = require('ethers');
+
+/**
+ * Resolves the institution's on-chain signer, so the msg.sender that
+ * registers/revokes a certificate always matches the institution that
+ * actually issued it, regardless of which account made the API call.
+ */
+async function resolveInstitutionContract(institutionId) {
+  const wallet = await institutionRepo.findWalletInfo(institutionId);
+  if (!wallet || wallet.wallet_index === null || wallet.wallet_index === undefined) {
+    throw new Error(`Institution ${institutionId} has no wallet_index configured for blockchain transactions`);
+  }
+  return getSignerForInstitution(wallet.wallet_index);
+}
 
 /**
  * STRATEGY PATTERN: Type-specific field extraction.
@@ -80,15 +94,16 @@ class CertificateService {
     // 2. Register on Blockchain with resilience check
     let txHash = null;
     try {
-      if (!contract || !provider) {
+      if (!provider) {
         throw new Error('Blockchain adapter not initialized. Check Ganache/Sepolia connection.');
       }
 
       console.log('[CertificateService] Registering hash on Blockchain...');
+      const institutionContract = await resolveInstitutionContract(data.institution_id);
       const certIdBytes = ethers.id(cert_id);
       const hashBytes = ethers.toBeArray('0x' + cert_hash);
 
-      const tx = await contract.registerCertificate(certIdBytes, hashBytes);
+      const tx = await institutionContract.registerCertificate(certIdBytes, hashBytes);
       const receipt = await tx.wait();
       txHash = receipt.hash;
 
@@ -164,14 +179,15 @@ class CertificateService {
     console.log('[CertificateService] Status updated to pending_blockchain');
 
     try {
-      if (!contract || !provider) {
+      if (!provider) {
         throw new Error('Blockchain adapter not initialized');
       }
 
+      const institutionContract = await resolveInstitutionContract(cert.institution_id);
       const certIdBytes = ethers.id(cert.cert_id);
       const hashBytes = ethers.toBeArray('0x' + cert.cert_hash);
 
-      const tx = await contract.registerCertificate(certIdBytes, hashBytes);
+      const tx = await institutionContract.registerCertificate(certIdBytes, hashBytes);
       const receipt = await tx.wait();
 
       const finalUpdate = await this.repository.updateStatusIf(
@@ -211,33 +227,129 @@ class CertificateService {
   }
 
   /**
-   *  NEW: Revokes a certificate with mandatory audit trail.
+   * Revokes a certificate with mandatory audit trail.
    * SRP: Only handles revocation logic and compliance logging.
+   *
+   * Revocation now sends a transaction (same lifecycle treatment as
+   * issuance): 'pending_revocation' -> 'revoked' or 'revocation_failed',
+   * with retryRevocation() picking up from the failed state.
+   *
+   * The audit log is written up front, before the blockchain call, so the
+   * mandatory reason is never lost if the transaction later needs a retry —
+   * mirroring how issuance's DB row is written before its blockchain call.
    */
   async revokeCertificate(certId, userId, reason) {
     const cert = await this.repository.findByIdRaw(certId);
     if (!cert) throw new Error('Certificate not found');
     if (cert.status === 'revoked') throw new Error('Already revoked');
+    if (cert.status === 'pending_revocation') throw new Error('Revocation already in progress');
 
-    // Atomic status update with concurrency protection
     const updated = await this.repository.updateStatusIf(
-      certId, 
-      cert.status, 
-      'revoked'
+      certId,
+      cert.status,
+      'pending_revocation'
     );
-    
+
     if (!updated) {
       throw new Error('Concurrent modification detected during revocation');
     }
 
-    // Create immutable audit trail entry
-    await this.repository.logRevocation(certId, userId, reason);
+    return this._sendRevocationTransaction(certId, cert.institution_id, userId, reason);
+  }
 
-    return { 
-      success: true, 
-      message: 'Certificate revoked successfully',
-      revoked_at: new Date().toISOString()
-    };
+  /**
+   * Retries the blockchain revocation transaction for a certificate stuck in
+   * 'revocation_failed'. Mirrors retryBlockchainRegistration exactly. The
+   * audit log entry was already written by the original revokeCertificate
+   * call, so it is not touched here.
+   */
+  async retryRevocation(certId) {
+    console.log(`[CertificateService] Retrying revocation for: ${certId}`);
+
+    const cert = await this.repository.findByIdRaw(certId);
+
+    if (!cert) {
+      throw new Error('Certificate not found');
+    }
+
+    if (cert.status !== 'revocation_failed') {
+      throw new Error(`Cannot retry: Certificate status is '${cert.status}', expected 'revocation_failed'`);
+    }
+
+    const updated = await this.repository.updateRevocationStatusIf(
+      certId,
+      'revocation_failed',
+      'pending_revocation'
+    );
+
+    if (!updated) {
+      throw new Error('Retry failed: Certificate status changed concurrently');
+    }
+
+    return this._sendRevocationTransaction(certId, cert.institution_id);
+  }
+
+  /**
+   * Shared blockchain step for both the initial revocation attempt and its
+   * retry: cert must already be in 'pending_revocation' when this runs.
+   *
+   * userId/reason are only passed on the initial attempt (never on retry,
+   * which must not create a second audit entry). The audit log write lives
+   * INSIDE this try block, alongside the chain call: if it throws, the
+   * certificate must fall through to 'revocation_failed' just like a chain
+   * failure would, rather than being stranded in 'pending_revocation' with
+   * no retry path (retryRevocation only accepts 'revocation_failed').
+   */
+  async _sendRevocationTransaction(certId, institutionId, userId = null, reason = null) {
+    try {
+      if (!provider) {
+        throw new Error('Blockchain adapter not initialized');
+      }
+
+      if (userId && reason) {
+        await this.repository.logRevocation(certId, userId, reason);
+      }
+
+      const institutionContract = await resolveInstitutionContract(institutionId);
+      const certIdBytes = ethers.id(certId);
+
+      const tx = await institutionContract.revokeCertificate(certIdBytes);
+      const receipt = await tx.wait();
+
+      const finalUpdate = await this.repository.updateRevocationStatusIf(
+        certId,
+        'pending_revocation',
+        'revoked',
+        receipt.hash
+      );
+
+      if (!finalUpdate) {
+        console.warn('[CertificateService] Blockchain revocation succeeded but DB update failed. Manual intervention required.');
+        return {
+          success: false,
+          message: 'Blockchain revocation completed but database update failed. Contact admin.',
+          tx_hash: receipt.hash
+        };
+      }
+
+      console.log('[CertificateService] Revocation successful. TxHash:', receipt.hash);
+      return {
+        success: true,
+        message: 'Certificate revoked successfully',
+        revoked_at: new Date().toISOString()
+      };
+
+    } catch (blockchainError) {
+      console.error('[CertificateService] Revocation blockchain call failed:', blockchainError.message);
+
+      await this.repository.updateRevocationStatusIf(
+        certId,
+        'pending_revocation',
+        'revocation_failed'
+      );
+
+      throw new Error(`Certificate revocation failed on blockchain: ${blockchainError.message}`);
+    }
   }
 
   /**

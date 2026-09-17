@@ -195,6 +195,25 @@ exports.updateStatusIf = async (certId, currentStatus, newStatus, txHash = null)
 };
 
 /**
+ * Atomically updates certificate status ONLY if currently in expected state,
+ * additionally recording the revocation transaction hash. Mirrors
+ * updateStatusIf but targets revocation_tx_hash instead of
+ * blockchain_tx_hash, since a revoked certificate needs its own tx hash
+ * without overwriting the one recorded at issuance.
+ */
+exports.updateRevocationStatusIf = async (certId, currentStatus, newStatus, txHash = null) => {
+  const query = txHash
+    ? `UPDATE certificates SET status = ?, revocation_tx_hash = ? WHERE cert_id = ? AND status = ?`
+    : `UPDATE certificates SET status = ? WHERE cert_id = ? AND status = ?`;
+  const params = txHash
+    ? [newStatus, txHash, certId, currentStatus]
+    : [newStatus, certId, currentStatus];
+
+  const [result] = await pool.query(query, params);
+  return result.affectedRows > 0;
+};
+
+/**
  * Legacy updateStatus for simple transitions (no concurrency check).
  * Used only in issuance flow where race conditions are impossible.
  */

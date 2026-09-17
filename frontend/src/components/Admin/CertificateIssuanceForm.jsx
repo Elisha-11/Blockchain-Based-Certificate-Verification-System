@@ -1,21 +1,45 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { QRCodeSVG } from 'qrcode.react';
 import api from '../../services/api';
 import { CheckCircle, XCircle, Plus, Trash2, Loader2 } from 'lucide-react';
 import { CERTIFICATE_THEME } from '../../utils/certificateTheme';
 
+// Decodes the logged-in admin's own institution from their JWT so an
+// institution_admin never has to (and never can) type an institution_id by
+// hand — a free-text field here previously defaulted to a hardcoded demo UUID
+// that nobody changed, silently attributing every certificate ever issued to
+// that one institution regardless of who was actually logged in. Cheap
+// synchronous decode, so no memoization needed.
+function getCurrentUser() {
+  const token = localStorage.getItem('jwt_token');
+  if (!token) return null;
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    return { role: payload.role, institution_id: payload.institution_id };
+  } catch {
+    return null;
+  }
+}
+
 export default function CertificateIssuanceForm({ onIssued }) {
+  const currentUser = getCurrentUser();
+  const isSuperAdmin = currentUser?.role === 'super_admin';
+
   const [type, setType] = useState('university');
   const [loading, setLoading] = useState(false);
   const [response, setResponse] = useState(null);
   const [error, setError] = useState(null);
 
-  // Pre-filled with known demo UUIDs to prevent formatting errors
   const [formData, setFormData] = useState({
     student_name: '',
-    institution_id: 'a911b6c7-3023-11f1-a766-484d7efdbe1f', 
+    // Only a super_admin can pick an institution manually (they issue on
+    // behalf of any institution); an institution_admin's is fixed from their
+    // own token and never exposed as an editable field below.
+    institution_id: isSuperAdmin ? '' : (currentUser?.institution_id || ''),
     issue_date: '',
     // University fields
-    student_id: 'a91d43bb-3023-11f1-a766-484d7efdbe1f',
+    student_id: '',
     program: '',
     class_of_degree: '',
     // Grade 12 fields
@@ -144,8 +168,21 @@ export default function CertificateIssuanceForm({ onIssued }) {
             </div>
             
             <div>
-              <label className={labelClasses}>Institution ID (UUID)</label>
-              <input name="institution_id" value={formData.institution_id} onChange={handleChange} className={`${inputClasses} font-mono text-xs`} required />
+              <label className={labelClasses}>Institution</label>
+              {isSuperAdmin ? (
+                <input
+                  name="institution_id"
+                  value={formData.institution_id}
+                  onChange={handleChange}
+                  placeholder="Institution UUID"
+                  className={`${inputClasses} font-mono text-xs`}
+                  required
+                />
+              ) : (
+                <div className={`${inputClasses} bg-gray-50 text-gray-500 font-mono text-xs truncate`} title={formData.institution_id}>
+                  {formData.institution_id || 'No institution on this account'}
+                </div>
+              )}
             </div>
             
             <div>
@@ -278,15 +315,32 @@ export default function CertificateIssuanceForm({ onIssued }) {
         {response && (
           <div className="mt-6 p-4 bg-green-50 border border-green-200 rounded-lg flex items-start gap-3">
             <CheckCircle className="text-green-600 flex-shrink-0 mt-0.5" size={20} />
-            <div className="w-full">
-              <h3 className="font-semibold text-green-800 text-sm">Successfully Registered</h3>
-              <p className="text-sm text-gray-700 mt-2">
-                <span className="font-medium">Certificate ID:</span> 
-                <span className="ml-2 font-mono text-blue-700">{response.cert_id}</span>
-              </p>
-              <p className="text-xs text-gray-500 mt-2 break-all">
-                <span className="font-medium">Hash:</span> {response.cert_hash}
-              </p>
+            <div className="w-full flex flex-col sm:flex-row gap-4 items-start">
+              <div className="bg-white p-2 rounded border border-gray-200 shrink-0">
+                <QRCodeSVG
+                  value={`${window.location.origin}/verify?id=${response.cert_id}`}
+                  size={80}
+                  bgColor="#ffffff"
+                  fgColor="#1e3a8a"
+                  level="H"
+                />
+              </div>
+              <div className="w-full">
+                <h3 className="font-semibold text-green-800 text-sm">Successfully Registered</h3>
+                <p className="text-sm text-gray-700 mt-2">
+                  <span className="font-medium">Certificate ID:</span>
+                  <span className="ml-2 font-mono text-blue-700">{response.cert_id}</span>
+                </p>
+                <p className="text-xs text-gray-500 mt-2 break-all">
+                  <span className="font-medium">Hash:</span> {response.cert_hash}
+                </p>
+                <Link
+                  to={`/admin/certificates/${response.cert_id}`}
+                  className="inline-block mt-3 text-sm font-medium text-blue-700 hover:text-blue-900 hover:underline"
+                >
+                  View / Print Certificate →
+                </Link>
+              </div>
             </div>
           </div>
         )}

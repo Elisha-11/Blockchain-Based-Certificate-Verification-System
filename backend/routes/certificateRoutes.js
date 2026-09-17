@@ -56,6 +56,16 @@ router.post('/:id/revoke',
 );
 
 /**
+ * POST /api/certificates/:id/retry-revocation
+ * Retry a failed blockchain revocation transaction.
+ */
+router.post('/:id/retry-revocation',
+  auth,
+  rbac('super_admin', 'institution_admin'),
+  certController.retryRevocation
+);
+
+/**
  * GET /api/certificates/:id/presentation
  * Public endpoint returning UI configuration for certificate type.
  * NO AUTHENTICATION REQUIRED.

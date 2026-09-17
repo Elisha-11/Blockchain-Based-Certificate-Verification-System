@@ -2,11 +2,11 @@
   "_format": "hh-sol-cache-2",
   "files": {
     "C:\\Users\\dell 3150\\Desktop\\cert-verification-system\\Blockchain-Based-Certificate-Verification-System\\blockchain\\contracts\\CertificateRegistry.sol": {
-      "lastModificationDate": 1776770544485,
-      "contentHash": "ceda34f17e511c4a8d8faad114bfc940",
+      "lastModificationDate": 1789603792527,
+      "contentHash": "7a2b4864e1587e06ef4c201869808bc9",
       "sourceName": "contracts/CertificateRegistry.sol",
       "solcConfig": {
-        "version": "0.8.24",
+        "version": "0.8.20",
         "settings": {
           "evmVersion": "paris",
           "optimizer": {
@@ -42,7 +42,7 @@
       "contentHash": "d41d8cd98f00b204e9800998ecf8427e",
       "sourceName": "contracts/interfaces/ICertificateRegistry.sol",
       "solcConfig": {
-        "version": "0.8.24",
+        "version": "0.8.20",
         "settings": {
           "evmVersion": "paris",
           "optimizer": {
@@ -74,7 +74,7 @@
       "contentHash": "d41d8cd98f00b204e9800998ecf8427e",
       "sourceName": "contracts/libraries/CertificateUtils.sol",
       "solcConfig": {
-        "version": "0.8.24",
+        "version": "0.8.20",
         "settings": {
           "evmVersion": "paris",
           "optimizer": {

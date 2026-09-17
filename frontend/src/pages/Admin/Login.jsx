@@ -21,7 +21,10 @@ export default function Login() {
       navigate('/admin/dashboard');
     } catch (error) {
       console.error('Login error:', error.response?.data || error.message);
-      alert('Login failed: ' + (error.response?.data?.error || 'Invalid credentials'));
+      const message = error.response
+        ? (error.response.data?.error || 'Invalid credentials')
+        : 'Cannot reach server. Check your connection and try again.';
+      alert('Login failed: ' + message);
     } finally {
       setLoading(false);
     }

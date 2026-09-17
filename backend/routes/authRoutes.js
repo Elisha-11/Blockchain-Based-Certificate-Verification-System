@@ -4,10 +4,11 @@ const authController = require('../controllers/authController');
 const auth = require('../middleware/auth');
 // FIX: Destructure rbac from the object export
 const { rbac } = require('../middleware/rbac');
+const { authLimiter } = require('../middleware/rateLimiter');
 
 // Public routes
-router.post('/register', authController.register);
-router.post('/login', authController.login);
+router.post('/register', authLimiter, authController.register);
+router.post('/login', authLimiter, authController.login);
 
 // Protected route example (for testing RBAC)
 router.get('/me', auth, (req, res) => {

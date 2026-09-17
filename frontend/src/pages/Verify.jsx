@@ -172,9 +172,15 @@ export default function Verify() {
                       </span>
                     </div>
                     <div className="text-xs text-gray-500 break-all">
-                      <span className="font-semibold">Verification Hash:</span> 
+                      <span className="font-semibold">Verification Hash:</span>
                       <span className="ml-2 font-mono">{result.details.cert_hash_preview}</span>
                     </div>
+                    {result.verification.blockchain_issuer && (
+                      <div className="text-xs text-gray-500 break-all">
+                        <span className="font-semibold">Issued By (On-Chain):</span>
+                        <span className="ml-2 font-mono">{result.verification.blockchain_issuer}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
