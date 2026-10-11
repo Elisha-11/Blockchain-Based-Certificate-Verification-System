@@ -221,7 +221,7 @@ Environment variables are read from `backend/.env` (`PORT`, `DB_HOST`, `DB_USER`
 ## Developers
 
 - Elisha Lungu
-- Nkonsi David Shumba
+- David Nkosinathi Shumba
 
 **Supervisor**: Mr. Andrea Theu
 **Department**: Computing and Informatics, University of Zambia
