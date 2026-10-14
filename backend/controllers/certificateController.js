@@ -1,5 +1,20 @@
 // backend/controllers/certificateController.js
 const certService = require('../services/certificateService');
+const institutionRepo = require('../repositories/institutionRepository');
+
+/**
+ * Which certificate_type values each kind of institution is authorized to
+ * issue. UNZA/CBU (type 'university') and any 'college' issue degrees and
+ * diplomas; ECZ (type 'examination_council') issues examination results;
+ * ZAQA (type 'regulatory_body') issues nothing — it only qualifies other
+ * institutions via PATCH /api/institutions/:id/status.
+ */
+const ALLOWED_CERT_TYPES_BY_INSTITUTION_TYPE = {
+  university: ['university', 'technical'],
+  college: ['university', 'technical'],
+  examination_council: ['examination'],
+  regulatory_body: []
+};
 
 // ✅ ZOD V4/V3 COMPATIBLE IMPORT FOR COMMONJS
 let z, ZodError;
@@ -21,27 +36,36 @@ const baseCertSchema = z.object({
   cert_id: z.string().min(1).optional()
 });
 
+// Student ID is the institution's own 10-digit student number, not a UUID.
+const studentIdSchema = z.string().regex(/^\d{10}$/, 'Student ID must be a 10-digit number').nullable().optional();
+
 // University-specific schema (strictly typed)
 const universitySchema = baseCertSchema.extend({
   certificate_type: z.literal('university'),
-  student_id: z.string().uuid('Valid student UUID required for university certificates'),
+  student_id: studentIdSchema,
   program: z.string().min(2, 'Program name required for university certificates'),
   class_of_degree: z.string().optional().nullable()
 });
 
-// Grade 12-specific schema (strictly typed)
-const grade12Schema = baseCertSchema.extend({
-  certificate_type: z.literal('grade12'),
-  candidate_number: z.string().min(1, 'Candidate number required for Grade 12 certificates'),
+// Examination schema covers every ECZ result type (Grade 7, Grade 9, Grade 12,
+// GCE) — they share the same shape (candidate number + subjects/grades) and
+// differ only by the 'level' field.
+const examinationSchema = baseCertSchema.extend({
+  certificate_type: z.literal('examination'),
+  level: z.enum(['grade7', 'grade9', 'grade12', 'gce'], {
+    message: 'level must be one of: grade7, grade9, grade12, gce'
+  }),
+  candidate_number: z.string().min(1, 'Candidate number required for examination certificates'),
   subjects: z.array(z.object({
     code: z.string().min(1, 'Subject code required'),
     grade: z.string().min(1, 'Subject grade required')
-  })).min(1, 'At least one subject required for Grade 12 certificates')
+  })).min(1, 'At least one subject required for examination certificates')
 });
 
 // Technical diploma-specific schema (strictly typed)
 const technicalSchema = baseCertSchema.extend({
   certificate_type: z.literal('technical'),
+  student_id: studentIdSchema,
   program: z.string().min(2, 'Program name required for technical certificates'),
   diploma_type: z.string().min(1, 'Diploma type required for technical certificates')
 });
@@ -49,7 +73,7 @@ const technicalSchema = baseCertSchema.extend({
 // Discriminated union automatically validates based on certificate_type value
 const issueSchema = z.discriminatedUnion('certificate_type', [
   universitySchema,
-  grade12Schema,
+  examinationSchema,
   technicalSchema
 ]);
 
@@ -63,7 +87,29 @@ exports.issue = async (req, res) => {
     
     const data = issueSchema.parse(req.body);
     console.log('[CertificateController] Validated type:', data.certificate_type);
-    
+
+    // Enforce ZAQA-regulated issuance rules: an institution must be qualified
+    // (is_active) and may only issue the credential types its institution
+    // type is authorized for. super_admin bypasses this (system-wide account,
+    // not bound to a single institution's mandate).
+    if (req.user.role !== 'super_admin') {
+      const institution = await institutionRepo.findById(req.user.institutionId);
+
+      if (!institution) {
+        return res.status(403).json({ error: 'Institution not found for this account' });
+      }
+      if (!institution.is_active) {
+        return res.status(403).json({ error: `${institution.name} is not currently qualified by ZAQA to issue credentials` });
+      }
+
+      const allowedTypes = ALLOWED_CERT_TYPES_BY_INSTITUTION_TYPE[institution.type] || [];
+      if (!allowedTypes.includes(data.certificate_type)) {
+        return res.status(403).json({
+          error: `${institution.name} is not authorized to issue '${data.certificate_type}' credentials`
+        });
+      }
+    }
+
     const result = await certService.issueCertificate(data);
     
     if (!result?.cert_id) {

@@ -26,9 +26,11 @@ const auth = (req, res, next) => {
       user_id: decoded.user_id,
       email: decoded.email,
       role: decoded.role,
-      institution_id: decoded.institution_id, 
+      institution_id: decoded.institution_id,
+      institution_code: decoded.institution_code,
+      institution_type: decoded.institution_type,
       full_name: decoded.full_name,
-      
+
       // Controller-compatible aliases (camelCase - matches frontend/service expectations)
       userId: decoded.user_id,              // Required by revokeCertificate controller
       institutionId: decoded.institution_id  // Required by getMyInstitutionCerts controller

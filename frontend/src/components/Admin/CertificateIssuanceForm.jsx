@@ -3,23 +3,69 @@ import api from '../../services/api';
 import { CheckCircle, XCircle, Plus, Trash2, Loader2 } from 'lucide-react';
 import { CERTIFICATE_THEME } from '../../utils/certificateTheme';
 
+// Mirrors backend ALLOWED_CERT_TYPES_BY_INSTITUTION_TYPE (certificateController.js):
+// universities/colleges issue degrees & diplomas, the examination council issues
+// exam results, and the regulator (ZAQA) issues nothing.
+const ALLOWED_TYPES_BY_INSTITUTION_TYPE = {
+  university: ['university', 'technical'],
+  college: ['university', 'technical'],
+  examination_council: ['examination'],
+  regulatory_body: []
+};
+
+// Tailwind needs literal class names at build time, so this can't be built
+// with a template string like `sm:grid-cols-${n}`.
+const GRID_COLS_BY_COUNT = {
+  1: 'sm:grid-cols-1',
+  2: 'sm:grid-cols-2',
+  3: 'sm:grid-cols-3'
+};
+
+const EXAM_LEVELS = [
+  { value: 'grade7', label: 'Grade 7' },
+  { value: 'grade9', label: 'Grade 9' },
+  { value: 'grade12', label: 'Grade 12' },
+  { value: 'gce', label: 'GCE' }
+];
+
+function getCurrentUser() {
+  const token = localStorage.getItem('jwt_token');
+  if (!token) return null;
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    return {
+      role: payload.role,
+      institution_id: payload.institution_id,
+      institution_type: payload.institution_type
+    };
+  } catch (e) {
+    return null;
+  }
+}
+
 export default function CertificateIssuanceForm({ onIssued }) {
-  const [type, setType] = useState('university');
+  const [user] = useState(getCurrentUser);
+  const isSuperAdmin = user?.role === 'super_admin';
+  const availableTypes = isSuperAdmin
+    ? ['university', 'examination', 'technical']
+    : (ALLOWED_TYPES_BY_INSTITUTION_TYPE[user?.institution_type] || []);
+
+  const [type, setType] = useState(availableTypes[0] || 'university');
   const [loading, setLoading] = useState(false);
   const [response, setResponse] = useState(null);
   const [error, setError] = useState(null);
 
-  // Pre-filled with known demo UUIDs to prevent formatting errors
   const [formData, setFormData] = useState({
     student_name: '',
-    institution_id: 'a911b6c7-3023-11f1-a766-484d7efdbe1f', 
+    institution_id: user?.institution_id || 'a911b6c7-3023-11f1-a766-484d7efdbe1f',
     issue_date: '',
     // University fields
-    student_id: 'a91d43bb-3023-11f1-a766-484d7efdbe1f',
+    student_id: '',
     program: '',
     class_of_degree: '',
-    // Grade 12 fields
+    // Examination fields
     candidate_number: '',
+    level: 'grade12',
     // Technical diploma fields
     diploma_type: ''
   });
@@ -64,12 +110,13 @@ export default function CertificateIssuanceForm({ onIssued }) {
         payload.student_id = formData.student_id.trim() || null;
         payload.program = formData.program.trim();
         payload.class_of_degree = formData.class_of_degree;
-      } else if (type === 'grade12') {
+      } else if (type === 'examination') {
+        payload.level = formData.level;
         payload.candidate_number = formData.candidate_number.trim();
         payload.subjects = subjects.filter(s => s.code.trim() && s.grade.trim());
 
         if (payload.subjects.length === 0) {
-          throw new Error('At least one subject with a grade is required for Grade 12 results.');
+          throw new Error('At least one subject with a grade is required for examination results.');
         }
       } else if (type === 'technical') {
         payload.program = formData.program.trim();
@@ -115,25 +162,31 @@ export default function CertificateIssuanceForm({ onIssued }) {
         
         <form onSubmit={handleSubmit} className="space-y-6">
           
-          {/* Certificate Type Selector */}
+          {/* Certificate Type Selector - restricted to what this institution is authorized to issue */}
           <div>
             <label className={labelClasses}>Credential Type</label>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              {['university', 'grade12', 'technical'].map((t) => (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() => setType(t)}
-                  className={`p-3 rounded-lg border-2 text-sm font-medium transition ${
-                    type === t
-                      ? CERTIFICATE_THEME[t].selectorActive
-                      : 'border-gray-200 text-gray-600 hover:border-gray-300'
-                  }`}
-                >
-                  {CERTIFICATE_THEME[t].label}
-                </button>
-              ))}
-            </div>
+            {availableTypes.length === 0 ? (
+              <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg p-3">
+                Your institution is not authorized to issue credentials.
+              </p>
+            ) : (
+              <div className={`grid grid-cols-1 ${GRID_COLS_BY_COUNT[availableTypes.length] || 'sm:grid-cols-3'} gap-3`}>
+                {availableTypes.map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setType(t)}
+                    className={`p-3 rounded-lg border-2 text-sm font-medium transition ${
+                      type === t
+                        ? CERTIFICATE_THEME[t].selectorActive
+                        : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                    }`}
+                  >
+                    {CERTIFICATE_THEME[t].label}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Common Fields */}
@@ -142,12 +195,19 @@ export default function CertificateIssuanceForm({ onIssued }) {
               <label className={labelClasses}>Full Name</label>
               <input name="student_name" value={formData.student_name} onChange={handleChange} placeholder="e.g. Alice Banda" className={inputClasses} required />
             </div>
-            
+
             <div>
-              <label className={labelClasses}>Institution ID (UUID)</label>
-              <input name="institution_id" value={formData.institution_id} onChange={handleChange} className={`${inputClasses} font-mono text-xs`} required />
+              <label className={labelClasses}>Institution ID (UUID){!isSuperAdmin && ' - Your Institution'}</label>
+              <input
+                name="institution_id"
+                value={formData.institution_id}
+                onChange={handleChange}
+                readOnly={!isSuperAdmin}
+                className={`${inputClasses} font-mono text-xs ${!isSuperAdmin ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                required
+              />
             </div>
-            
+
             <div>
               <label className={labelClasses}>Issue Date</label>
               <input name="issue_date" type="date" value={formData.issue_date} onChange={handleChange} className={inputClasses} required />
@@ -173,15 +233,23 @@ export default function CertificateIssuanceForm({ onIssued }) {
                 </select>
               </div>
               <div className="sm:col-span-2">
-                <label className={labelClasses}>Student ID (UUID) - Optional</label>
-                <input name="student_id" value={formData.student_id} onChange={handleChange} className={`${inputClasses} font-mono text-xs`} />
+                <label className={labelClasses}>Student ID (10-digit number) - Optional</label>
+                <input name="student_id" value={formData.student_id} onChange={handleChange} placeholder="e.g. 2021045678" inputMode="numeric" maxLength={10} className={`${inputClasses} font-mono text-xs`} />
               </div>
             </div>
           )}
 
-          {/* Dynamic Fields: Grade 12 */}
-          {type === 'grade12' && (
+          {/* Dynamic Fields: Examination (Grade 7 / Grade 9 / Grade 12 / GCE) */}
+          {type === 'examination' && (
             <div className="space-y-4 pt-2 border-t border-gray-100">
+              <div>
+                <label className={labelClasses}>Level</label>
+                <select name="level" value={formData.level} onChange={handleChange} className={inputClasses}>
+                  {EXAM_LEVELS.map((l) => (
+                    <option key={l.value} value={l.value}>{l.label}</option>
+                  ))}
+                </select>
+              </div>
               <div>
                 <label className={labelClasses}>Candidate Number</label>
                 <input name="candidate_number" value={formData.candidate_number} onChange={handleChange} placeholder="e.g. 1234567890" className={inputClasses} required />
@@ -241,16 +309,16 @@ export default function CertificateIssuanceForm({ onIssued }) {
                 <input name="diploma_type" value={formData.diploma_type} onChange={handleChange} placeholder="e.g. Advanced Certificate" className={inputClasses} required />
               </div>
               <div className="sm:col-span-2">
-                <label className={labelClasses}>Student ID (UUID) - Optional</label>
-                <input name="student_id" value={formData.student_id} onChange={handleChange} className={`${inputClasses} font-mono text-xs`} />
+                <label className={labelClasses}>Student ID (10-digit number) - Optional</label>
+                <input name="student_id" value={formData.student_id} onChange={handleChange} placeholder="e.g. 2021045678" inputMode="numeric" maxLength={10} className={`${inputClasses} font-mono text-xs`} />
               </div>
             </div>
           )}
 
           {/* Submit Button */}
-          <button 
-            type="submit" 
-            disabled={loading}
+          <button
+            type="submit"
+            disabled={loading || availableTypes.length === 0}
             className="w-full bg-blue-900 text-white p-3.5 rounded-lg hover:bg-blue-800 font-semibold transition shadow-sm disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
             {loading ? (

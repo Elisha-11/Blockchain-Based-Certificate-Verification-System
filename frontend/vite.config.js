@@ -3,6 +3,12 @@ import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
+  // Listen on all interfaces (not just localhost) so a phone on the same
+  // Wi-Fi can load the dev server at this machine's LAN IP — otherwise
+  // QR codes that embed window.location.origin are unreachable off-device.
+  server: {
+    host: true
+  },
   plugins: [
     react(),
     VitePWA({

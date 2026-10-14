@@ -181,7 +181,7 @@ const CertificateList = () => {
                   })()}
                 </td>
                 <td className="p-3 text-sm">
-                  {cert.certificate_type === 'grade12' 
+                  {cert.certificate_type === 'examination' || cert.certificate_type === 'grade12'
                     ? `${cert.candidate_number} - ${getSubjectCount(cert.metadata)} subjects`
                     : cert.program || 'N/A'}
                 </td>

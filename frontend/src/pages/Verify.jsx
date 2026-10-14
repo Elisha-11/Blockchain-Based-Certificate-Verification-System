@@ -119,13 +119,17 @@ export default function Verify() {
                   </div>
 
                   {/* Dynamic Type-Specific Details */}
-                  {result.certificate_type === 'grade12' ? (
+                  {result.certificate_type === 'examination' || result.certificate_type === 'grade12' ? (
                     <div className="space-y-3">
+                      <div>
+                        <span className="font-semibold text-gray-500 block text-xs uppercase tracking-wide">Level</span>
+                        <p className="text-gray-900 font-medium mt-1 uppercase">{result.details.level || 'N/A'}</p>
+                      </div>
                       <div>
                         <span className="font-semibold text-gray-500 block text-xs uppercase tracking-wide">Candidate Number</span>
                         <p className="text-gray-900 font-medium font-mono mt-1">{result.details.candidate_number}</p>
                       </div>
-                      
+
                       <div>
                         <span className="font-semibold text-gray-500 block text-xs uppercase tracking-wide mb-2">Examination Subjects</span>
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">

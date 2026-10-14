@@ -1,0 +1,50 @@
+{
+  "_format": "hh3-sol-build-info-1",
+  "id": "solc-0_8_20-2fdbeb1cbca7564b4579e296ca954fe07a20b542",
+  "solcVersion": "0.8.20",
+  "solcLongVersion": "0.8.20+commit.a1b79de6",
+  "compilerType": "solc",
+  "userSourceNameMap": {
+    "contracts/CertificateRegistry.sol": "project/contracts/CertificateRegistry.sol",
+    "contracts/interfaces/ICertificateRegistry.sol": "project/contracts/interfaces/ICertificateRegistry.sol",
+    "contracts/libraries/CertificateUtils.sol": "project/contracts/libraries/CertificateUtils.sol"
+  },
+  "input": {
+    "language": "Solidity",
+    "settings": {
+      "evmVersion": "paris",
+      "outputSelection": {
+        "*": {
+          "": [
+            "ast"
+          ],
+          "*": [
+            "abi",
+            "evm.bytecode.linkReferences",
+            "evm.bytecode.object",
+            "evm.bytecode.opcodes",
+            "evm.bytecode.sourceMap",
+            "evm.deployedBytecode.immutableReferences",
+            "evm.deployedBytecode.linkReferences",
+            "evm.deployedBytecode.object",
+            "evm.deployedBytecode.opcodes",
+            "evm.deployedBytecode.sourceMap",
+            "evm.methodIdentifiers"
+          ]
+        }
+      },
+      "remappings": []
+    },
+    "sources": {
+      "project/contracts/CertificateRegistry.sol": {
+        "content": "// SPDX-License-Identifier: MIT\r\npragma solidity ^0.8.20;\r\n\r\ncontract CertificateRegistry {\r\n    // Mapping from cert_id (bytes32) to its hash (bytes32)\r\n    mapping(bytes32 => bytes32) public certificateHashes;\r\n    \r\n    // Mapping from cert_id to issuer address (for accountability)\r\n    mapping(bytes32 => address) public issuers;\r\n    \r\n    // Event emitted when a certificate is registered\r\n    event CertificateRegistered(bytes32 indexed certId, bytes32 hash, address issuer);\r\n    \r\n    // Event emitted when a certificate is revoked\r\n    event CertificateRevoked(bytes32 indexed certId, address revoker);\r\n\r\n    // Modifier to ensure only authorized issuers can register (simplified for prototype)\r\n    // In production, you would use AccessControl from OpenZeppelin\r\n    modifier onlyAuthorized() {\r\n        // For prototype: Allow any caller. \r\n        // TODO: Restrict to specific institution addresses in Phase 4\r\n        _;\r\n    }\r\n\r\n    /**\r\n     * @dev Register a new certificate hash on-chain\r\n     * @param certId The unique ID of the certificate (converted to bytes32)\r\n     * @param hash The SHA-256 hash of the certificate data\r\n     */\r\n    function registerCertificate(bytes32 certId, bytes32 hash) external onlyAuthorized {\r\n        require(certificateHashes[certId] == bytes32(0), \"Certificate already registered\");\r\n        require(hash != bytes32(0), \"Hash cannot be zero\");\r\n        \r\n        certificateHashes[certId] = hash;\r\n        issuers[certId] = msg.sender;\r\n        \r\n        emit CertificateRegistered(certId, hash, msg.sender);\r\n    }\r\n\r\n    /**\r\n     * @dev Verify a certificate hash against the on-chain record\r\n     * @param certId The unique ID of the certificate\r\n     * @param hash The SHA-256 hash to verify\r\n     * @return isValid True if the hash matches the on-chain record\r\n     */\r\n    function verifyCertificate(bytes32 certId, bytes32 hash) external view returns (bool isValid) {\r\n        return certificateHashes[certId] == hash;\r\n    }\r\n\r\n    /**\r\n     * @dev Revoke a certificate (mark hash as zero)\r\n     * @param certId The unique ID of the certificate\r\n     */\r\n    function revokeCertificate(bytes32 certId) external {\r\n        require(certificateHashes[certId] != bytes32(0), \"Certificate not found\");\r\n        require(issuers[certId] == msg.sender, \"Only issuer can revoke\");\r\n        \r\n        delete certificateHashes[certId];\r\n        emit CertificateRevoked(certId, msg.sender);\r\n    }\r\n}"
+      },
+      "project/contracts/interfaces/ICertificateRegistry.sol": {
+        "content": ""
+      },
+      "project/contracts/libraries/CertificateUtils.sol": {
+        "content": ""
+      }
+    }
+  }
+}

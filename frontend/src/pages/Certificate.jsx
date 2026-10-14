@@ -5,6 +5,13 @@ import api from '../services/api';
 import { ShieldCheck, Printer, Download, ArrowLeft, Building2 } from 'lucide-react';
 import { getCertificateTheme, resolveCertType } from '../utils/certificateTheme';
 
+const EXAM_LEVEL_LABELS = {
+  grade7: 'Grade 7 National Assessment',
+  grade9: 'Grade 9 National Assessment',
+  grade12: 'Grade 12 National Examination',
+  gce: 'General Certificate of Education'
+};
+
 export default function Certificate() {
   const { certId } = useParams();
   const navigate = useNavigate();
@@ -45,9 +52,15 @@ export default function Certificate() {
         return;
       }
 
+      // VITE_PUBLIC_BASE_URL lets the QR code embed a phone-reachable address
+      // even if the admin opened this page via 'localhost' themselves — a QR
+      // built from window.location.origin in that case would be unreachable
+      // off-device, same as the API_BASE_URL problem in services/api.js.
+      const publicBaseUrl = import.meta.env.VITE_PUBLIC_BASE_URL || window.location.origin;
+
       setCertificate({
         ...certData,
-        verification_url: `${window.location.origin}/verify?id=${certId}`
+        verification_url: `${publicBaseUrl}/verify?id=${certId}`
       });
     } catch (err) {
       setError('Failed to load certificate: ' + (err.response?.data?.error || err.message));
@@ -95,7 +108,7 @@ export default function Certificate() {
   const certType = resolveCertType(certificate?.certificate_type);
   const theme = getCertificateTheme(certificate?.certificate_type);
   const ThemeIcon = theme.icon;
-  const isGrade12 = certType === 'grade12';
+  const isGrade12 = certType === 'examination';
   const isTechnical = certType === 'technical';
   const institutionName = certificate?.institution_name || 'Unknown Institution';
   const institutionCode = certificate?.institution_code || '';
@@ -234,7 +247,7 @@ export default function Certificate() {
                     {certificate.student_name}
                   </h2>
                   <p className="text-lg text-gray-700">
-                    has sat for the General Certificate of Education Examination held in{' '}
+                    has sat for the {EXAM_LEVEL_LABELS[certificate.metadata?.level] || 'General Certificate of Education'} Examination held in{' '}
                     <span className={`font-bold ${theme.heading}`}>{certificate.metadata?.exam_year || '2026'}</span>
                   </p>
                 </div>

@@ -10,7 +10,10 @@ const { contract, provider, CONTRACT_ADDRESS } = require('../config/blockchain')
  * OCP: Add new certificate types by adding entries to this map.
  */
 const DETAIL_STRATEGIES = {
-  grade12: (cert, metadata) => ({
+  examination: (cert, metadata) => ({
+    student_name: cert.student_name,
+    issue_date: cert.issue_date,
+    level: metadata.level || null,
     candidate_number: cert.candidate_number,
     exam_year: metadata.exam_year || null,
     subjects: metadata.subjects || [],
@@ -18,6 +21,8 @@ const DETAIL_STRATEGIES = {
     institution_code: cert.institution_code
   }),
   university: (cert, metadata) => ({
+    student_name: cert.student_name,
+    issue_date: cert.issue_date,
     program: cert.program,
     class_of_degree: metadata.class_of_degree || 'Not Specified',
     student_id: cert.student_id,
@@ -25,6 +30,8 @@ const DETAIL_STRATEGIES = {
     institution_code: cert.institution_code
   }),
   technical: (cert, metadata) => ({
+    student_name: cert.student_name,
+    issue_date: cert.issue_date,
     program: cert.program,
     diploma_type: metadata.diploma_type || 'Not Specified',
     student_id: cert.student_id,
@@ -32,6 +39,12 @@ const DETAIL_STRATEGIES = {
     institution_code: cert.institution_code
   })
 };
+
+// Legacy alias: certificates issued before the grade12 -> examination rename
+// still have certificate_type='grade12' stored (renaming it would change the
+// hashed certificate_type and break their verification), so keep serving them
+// through the same formatter.
+DETAIL_STRATEGIES.grade12 = DETAIL_STRATEGIES.examination;
 
 /**
  * PURE FUNCTION: Constructs hash input deterministically.

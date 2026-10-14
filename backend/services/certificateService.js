@@ -10,11 +10,12 @@ const { ethers } = require('ethers');
  * OCP: Add new certificate types by adding entries to this map ONLY.
  */
 const TYPE_STRATEGIES = {
-  grade12: (data) => ({
+  examination: (data) => ({
     candidate_number: data.candidate_number,
     program: null,
     student_id: null,
     metadata: {
+      level: data.level,
       exam_year: new Date(data.issue_date).getFullYear(),
       subjects: data.subjects || []
     }
@@ -246,11 +247,11 @@ class CertificateService {
    */
   getPresentationConfig(certificateType) {
     const configs = {
-      grade12: {
+      examination: {
         template: 'examination_result',
-        displayFields: ['candidate_number', 'exam_year', 'subjects'],
+        displayFields: ['level', 'candidate_number', 'exam_year', 'subjects'],
         colorScheme: 'national_green',
-        label: 'Grade 12 Certificate'
+        label: 'Examination Result'
       },
       university: {
         template: 'academic_degree',
@@ -265,6 +266,10 @@ class CertificateService {
         label: 'Technical Diploma'
       }
     };
+
+    // Legacy alias: certificates issued before the grade12 -> examination
+    // rename still have certificate_type='grade12' stored in the DB.
+    configs.grade12 = configs.examination;
 
     return configs[certificateType] || configs.university;
   }

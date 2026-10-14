@@ -2,10 +2,15 @@ import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import CertificateList from '../components/Admin/CertificateList';
 import CertificateIssuanceForm from '../components/Admin/CertificateIssuanceForm';
-import { ShieldCheck, Zap, BadgeCheck, ArrowRight, LogOut, List, PlusCircle } from 'lucide-react';
+import InstitutionManagement from '../components/Admin/InstitutionManagement';
+import Verify from './Verify';
+import { ShieldCheck, Zap, BadgeCheck, ArrowRight, LogOut, List, PlusCircle, Search, Building2 } from 'lucide-react';
 
 export default function Home() {
   const [isAdmin, setIsAdmin] = useState(false);
+  // ZAQA (institution_type 'regulatory_body') qualifies institutions rather
+  // than issuing or holding certificates of its own.
+  const [isRegulator, setIsRegulator] = useState(false);
   const [activeTab, setActiveTab] = useState('list');
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
@@ -17,6 +22,9 @@ export default function Home() {
         const payload = JSON.parse(atob(token.split('.')[1]));
         if (payload.role === 'institution_admin' || payload.role === 'super_admin') {
           setIsAdmin(true);
+          const regulator = payload.institution_type === 'regulatory_body';
+          setIsRegulator(regulator);
+          setActiveTab(regulator ? 'institutions' : 'list');
         } else {
           localStorage.removeItem('jwt_token');
         }
@@ -60,30 +68,55 @@ export default function Home() {
         </header>
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6">
-          <div className="flex gap-2 mb-6">
+          <div className="flex gap-2 mb-6 flex-wrap">
+            {isRegulator ? (
+              <button
+                onClick={() => setActiveTab('institutions')}
+                className={`flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium transition-colors ${
+                  activeTab === 'institutions' ? 'bg-blue-900 text-white shadow-md' : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-300'
+                }`}
+              >
+                <Building2 size={18} /> Manage Institutions
+              </button>
+            ) : (
+              <>
+                <button
+                  onClick={() => setActiveTab('list')}
+                  className={`flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium transition-colors ${
+                    activeTab === 'list' ? 'bg-blue-900 text-white shadow-md' : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-300'
+                  }`}
+                >
+                  <List size={18} /> View Certificates
+                </button>
+                <button
+                  onClick={() => setActiveTab('issue')}
+                  className={`flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium transition-colors ${
+                    activeTab === 'issue' ? 'bg-blue-900 text-white shadow-md' : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-300'
+                  }`}
+                >
+                  <PlusCircle size={18} /> Issue Certificate
+                </button>
+              </>
+            )}
             <button
-              onClick={() => setActiveTab('list')}
+              onClick={() => setActiveTab('verify')}
               className={`flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium transition-colors ${
-                activeTab === 'list' ? 'bg-blue-900 text-white shadow-md' : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-300'
+                activeTab === 'verify' ? 'bg-blue-900 text-white shadow-md' : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-300'
               }`}
             >
-              <List size={18} /> View Certificates
-            </button>
-            <button
-              onClick={() => setActiveTab('issue')}
-              className={`flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium transition-colors ${
-                activeTab === 'issue' ? 'bg-blue-900 text-white shadow-md' : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-300'
-              }`}
-            >
-              <PlusCircle size={18} /> Issue Certificate
+              <Search size={18} /> Verify Certificate
             </button>
           </div>
 
           <main>
-            {activeTab === 'list' ? (
+            {activeTab === 'institutions' ? (
+              <InstitutionManagement />
+            ) : activeTab === 'list' ? (
               <CertificateList />
-            ) : (
+            ) : activeTab === 'issue' ? (
               <CertificateIssuanceForm onIssued={() => setActiveTab('list')} />
+            ) : (
+              <Verify />
             )}
           </main>
         </div>

@@ -18,9 +18,15 @@ exports.login = async (req, res) => {
   try {
     const { email, password } = loginSchema.parse(req.body);
 
-    // Find user by email
+    // Find user by email, joining institution so role-gated UI (e.g. ZAQA's
+    // regulator dashboard vs. an issuing institution's forms) doesn't need a
+    // second round-trip after login.
     const [rows] = await pool.query(
-      'SELECT user_id, email, password_hash, full_name, role, institution_id, is_active FROM users WHERE email = ?',
+      `SELECT u.user_id, u.email, u.password_hash, u.full_name, u.role, u.institution_id, u.is_active,
+              i.code AS institution_code, i.type AS institution_type, i.is_active AS institution_is_active
+       FROM users u
+       LEFT JOIN institutions i ON u.institution_id = i.institution_id
+       WHERE u.email = ?`,
       [email]
     );
 
@@ -46,8 +52,10 @@ exports.login = async (req, res) => {
       { 
         user_id: user.user_id,          // FIXED: was userId
         email: user.email, 
-        role: user.role, 
+        role: user.role,
         institution_id: user.institution_id, // FIXED: was institutionId
+        institution_code: user.institution_code,
+        institution_type: user.institution_type,
         full_name: user.full_name
       },
       process.env.JWT_SECRET,
@@ -67,7 +75,9 @@ exports.login = async (req, res) => {
         email: user.email,
         full_name: user.full_name,
         role: user.role,
-        institution_id: user.institution_id // ADDED: was missing
+        institution_id: user.institution_id, // ADDED: was missing
+        institution_code: user.institution_code,
+        institution_type: user.institution_type
       }
     });
 

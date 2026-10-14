@@ -8,8 +8,8 @@ import { FileText, GraduationCap, Award } from 'lucide-react';
  * issuance form all agree on what each credential type looks like.
  */
 export const CERTIFICATE_THEME = {
-  grade12: {
-    label: 'Grade 12 Result',
+  examination: {
+    label: 'Examination Result',
     icon: FileText,
     // Admin list "Type" pill
     badge: 'bg-green-100 text-green-800 border border-green-200',
@@ -81,7 +81,10 @@ export const CERTIFICATE_THEME = {
  * certificateService.getPresentationConfig() on the backend.
  */
 export function resolveCertType(certificateType) {
-  if (certificateType === 'grade12' || certificateType === 'technical') {
+  // 'grade12' is a legacy value from before certificates were generalized
+  // into a single 'examination' type (Grade 7/9/12 + GCE).
+  if (certificateType === 'grade12') return 'examination';
+  if (certificateType === 'examination' || certificateType === 'technical') {
     return certificateType;
   }
   return 'university';
