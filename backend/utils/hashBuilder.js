@@ -38,6 +38,10 @@ exports.buildCertificateHashInput = (certId, baseData, typeFields = {}) => {
       ? String(typeFields.program).trim() 
       : null,
     class_of_degree: typeFields.class_of_degree || null,
+    // Pulled out of metadata into the top-level hash input so generateDeterministicHash
+    // hashes it. Null for pre-classification certificates, which keeps their
+    // hash unchanged — see the classification note in utils/crypto.js.
+    classification: typeFields.metadata?.classification || null,
     metadata: {}
   };
 };
