@@ -1,6 +1,19 @@
 // backend/controllers/certificateController.js
 const certService = require('../services/certificateService');
 const institutionRepo = require('../repositories/institutionRepository');
+const auditRepo = require('../repositories/auditRepository');
+const { CLASSIFICATIONS } = require('../utils/classification');
+
+/**
+ * Who performed the action, for the regulator audit trail. Captured here
+ * rather than in the service so the service stays free of Express types.
+ */
+const actorFrom = (req) => ({
+  user_id: req.user?.user_id || null,
+  email: req.user?.email || null,
+  ip: req.ip,
+  user_agent: req.headers['user-agent']
+});
 
 /**
  * Which certificate_type values each kind of institution is authorized to
@@ -39,12 +52,27 @@ const baseCertSchema = z.object({
 // Student ID is the institution's own 10-digit student number, not a UUID.
 const studentIdSchema = z.string().regex(/^\d{10}$/, 'Student ID must be a 10-digit number').nullable().optional();
 
+// The one classification vocabulary shared by every credential type. Legacy
+// degree classes ('First Class', 'Second Class Upper', ...) are rejected
+// rather than silently accepted, so the stored vocabulary stays consistent —
+// certificates issued under the old values keep their original metadata and
+// are unaffected.
+const classificationSchema = z
+  .enum(CLASSIFICATIONS, {
+    message: `classification must be one of: ${CLASSIFICATIONS.join(', ')}`
+  })
+  .nullable()
+  .optional();
+
 // University-specific schema (strictly typed)
 const universitySchema = baseCertSchema.extend({
   certificate_type: z.literal('university'),
   student_id: studentIdSchema,
   program: z.string().min(2, 'Program name required for university certificates'),
-  class_of_degree: z.string().optional().nullable()
+  classification: classificationSchema,
+  // Legacy alias for 'classification', kept so an older client still works.
+  // The service reads classification first and falls back to this.
+  class_of_degree: classificationSchema
 });
 
 // Examination schema covers every ECZ result type (Grade 7, Grade 9, Grade 12,
@@ -58,8 +86,13 @@ const examinationSchema = baseCertSchema.extend({
   candidate_number: z.string().min(1, 'Candidate number required for examination certificates'),
   subjects: z.array(z.object({
     code: z.string().min(1, 'Subject code required'),
-    grade: z.string().min(1, 'Subject grade required')
+    // Constrained to the ECZ 1-9 scale because the certificate's
+    // classification is derived by summing these as aggregate points — a
+    // free-text grade would silently drop out of that calculation.
+    grade: z.string().regex(/^[1-9]$/, 'Subject grade must be a single digit 1-9')
   })).min(1, 'At least one subject required for examination certificates')
+  // No classification field: it is derived from the grades above, never
+  // submitted by the issuer. See utils/classification.js.
 });
 
 // Technical diploma-specific schema (strictly typed)
@@ -67,7 +100,8 @@ const technicalSchema = baseCertSchema.extend({
   certificate_type: z.literal('technical'),
   student_id: studentIdSchema,
   program: z.string().min(2, 'Program name required for technical certificates'),
-  diploma_type: z.string().min(1, 'Diploma type required for technical certificates')
+  diploma_type: z.string().min(1, 'Diploma type required for technical certificates'),
+  classification: classificationSchema
 });
 
 // Discriminated union automatically validates based on certificate_type value
@@ -76,6 +110,27 @@ const issueSchema = z.discriminatedUnion('certificate_type', [
   examinationSchema,
   technicalSchema
 ]);
+
+/**
+ * Records an issuance the system refused outright — a de-qualified institution
+ * or one reaching for a credential type outside its mandate. These never reach
+ * the service layer, so without this they would leave no trace at all, which
+ * is the opposite of what a regulator needs from an audit trail.
+ */
+const refuseIssuance = (req, data, reason) =>
+  auditRepo.record({
+    event_type: 'issuance_failed',
+    cert_id: null,
+    institution_id: data.institution_id,
+    actor_user_id: req.user?.user_id || null,
+    actor_email: req.user?.email || null,
+    actor_ip: req.ip,
+    user_agent: req.headers['user-agent'],
+    student_name: data.student_name,
+    certificate_type: data.certificate_type,
+    classification: null,
+    detail: `Refused: ${reason}`
+  });
 
 /**
  * POST /api/certificates
@@ -99,18 +154,20 @@ exports.issue = async (req, res) => {
         return res.status(403).json({ error: 'Institution not found for this account' });
       }
       if (!institution.is_active) {
-        return res.status(403).json({ error: `${institution.name} is not currently qualified by ZAQA to issue credentials` });
+        const error = `${institution.name} is not currently qualified by ZAQA to issue credentials`;
+        await refuseIssuance(req, data, error);
+        return res.status(403).json({ error });
       }
 
       const allowedTypes = ALLOWED_CERT_TYPES_BY_INSTITUTION_TYPE[institution.type] || [];
       if (!allowedTypes.includes(data.certificate_type)) {
-        return res.status(403).json({
-          error: `${institution.name} is not authorized to issue '${data.certificate_type}' credentials`
-        });
+        const error = `${institution.name} is not authorized to issue '${data.certificate_type}' credentials`;
+        await refuseIssuance(req, data, error);
+        return res.status(403).json({ error });
       }
     }
 
-    const result = await certService.issueCertificate(data);
+    const result = await certService.issueCertificate(data, actorFrom(req));
     
     if (!result?.cert_id) {
       throw new Error('Service returned invalid issuance result');
@@ -222,7 +279,7 @@ exports.retryBlockchain = async (req, res) => {
       return res.status(403).json({ error: 'Access denied: Certificate belongs to different institution' });
     }
 
-    const result = await certService.retryBlockchainRegistration(id);
+    const result = await certService.retryBlockchainRegistration(id, actorFrom(req));
     res.json(result);
   } catch (err) {
     console.error('[CertificateController] Retry failed:', err.message);
@@ -285,7 +342,7 @@ exports.revokeCertificate = async (req, res) => {
       return res.status(409).json({ error: 'Certificate already revoked' });
     }
 
-    const result = await certService.revokeCertificate(id, req.user.userId, reason.trim());
+    const result = await certService.revokeCertificate(id, req.user.userId, reason.trim(), actorFrom(req));
     res.json(result);
   } catch (err) {
     console.error('[CertificateController] Revocation failed:', err.message);

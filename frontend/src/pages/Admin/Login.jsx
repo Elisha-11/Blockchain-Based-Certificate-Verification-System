@@ -21,7 +21,13 @@ export default function Login() {
       navigate('/admin/dashboard');
     } catch (error) {
       console.error('Login error:', error.response?.data || error.message);
-      alert('Login failed: ' + (error.response?.data?.error || 'Invalid credentials'));
+      // Only a response from the server can tell us the credentials were wrong.
+      // Without one the request never arrived (backend down, or VITE_API_BASE_URL
+      // pointing at a stale LAN IP), so say that instead of blaming the password.
+      const message = error.response
+        ? error.response.data?.error || 'Invalid credentials'
+        : `Could not reach the server at ${import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'}`;
+      alert('Login failed: ' + message);
     } finally {
       setLoading(false);
     }

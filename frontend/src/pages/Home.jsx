@@ -3,8 +3,9 @@ import { Link, useNavigate } from 'react-router-dom';
 import CertificateList from '../components/Admin/CertificateList';
 import CertificateIssuanceForm from '../components/Admin/CertificateIssuanceForm';
 import InstitutionManagement from '../components/Admin/InstitutionManagement';
+import RegulatorAuditLog from '../components/Admin/RegulatorAuditLog';
 import Verify from './Verify';
-import { ShieldCheck, Zap, BadgeCheck, ArrowRight, LogOut, List, PlusCircle, Search, Building2 } from 'lucide-react';
+import { ShieldCheck, Zap, BadgeCheck, ArrowRight, LogOut, List, PlusCircle, Search, Building2, ShieldAlert } from 'lucide-react';
 
 export default function Home() {
   const [isAdmin, setIsAdmin] = useState(false);
@@ -70,14 +71,24 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6">
           <div className="flex gap-2 mb-6 flex-wrap">
             {isRegulator ? (
-              <button
-                onClick={() => setActiveTab('institutions')}
-                className={`flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium transition-colors ${
-                  activeTab === 'institutions' ? 'bg-blue-900 text-white shadow-md' : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-300'
-                }`}
-              >
-                <Building2 size={18} /> Manage Institutions
-              </button>
+              <>
+                <button
+                  onClick={() => setActiveTab('institutions')}
+                  className={`flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium transition-colors ${
+                    activeTab === 'institutions' ? 'bg-blue-900 text-white shadow-md' : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-300'
+                  }`}
+                >
+                  <Building2 size={18} /> Manage Institutions
+                </button>
+                <button
+                  onClick={() => setActiveTab('audit')}
+                  className={`flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium transition-colors ${
+                    activeTab === 'audit' ? 'bg-blue-900 text-white shadow-md' : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-300'
+                  }`}
+                >
+                  <ShieldAlert size={18} /> Audit Trail
+                </button>
+              </>
             ) : (
               <>
                 <button
@@ -111,6 +122,8 @@ export default function Home() {
           <main>
             {activeTab === 'institutions' ? (
               <InstitutionManagement />
+            ) : activeTab === 'audit' ? (
+              <RegulatorAuditLog />
             ) : activeTab === 'list' ? (
               <CertificateList />
             ) : activeTab === 'issue' ? (

@@ -147,16 +147,33 @@ export default function Certificate() {
       <style>{`
         @media print {
           @page { size: A4 portrait; margin: 0mm; }
-          html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: visible; background: white; }
+          html, body { margin: 0; padding: 0; width: 100%; height: auto; overflow: visible; background: white; }
           body * { visibility: hidden; }
           #certificate-page, #certificate-page * { visibility: visible; }
           #certificate-page {
             position: absolute; left: 0; top: 0;
-            width: 210mm; height: 297mm;
+            width: 210mm;
+            /* height was pinned to 297mm while the container carries Tailwind's
+               overflow-hidden, so any certificate taller than one A4 page -- an
+               examination result with several subjects, say -- was CLIPPED at
+               the page edge, slicing through the footer and cutting the QR code
+               in half. A clipped QR cannot be decoded, which broke verifying by
+               uploading the document. Let the page grow instead, and keep the
+               footer whole with the break-inside rules below. */
+            height: auto;
+            min-height: 297mm;
+            overflow: visible;
             margin: 0; padding: 0;
             background: white;
             box-shadow: none; border: none;
             display: block;
+          }
+          /* Never let a page break fall inside the signature/QR row or the
+             hash footer: a QR split across two sheets is unscannable. */
+          #certificate-page footer,
+          #certificate-page .avoid-break {
+            break-inside: avoid;
+            page-break-inside: avoid;
           }
           .no-print { display: none !important; }
           * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -327,7 +344,7 @@ export default function Certificate() {
 
                   <div className={`inline-block px-8 py-3 ${theme.badgeBg} border rounded-full mt-4`}>
                     <p className={`text-sm ${theme.badgeText} font-semibold uppercase tracking-wider`}>
-                      Classification: {certificate.class_of_degree || certificate.metadata?.class_of_degree || 'Not Specified'}
+                      Classification: {certificate.metadata?.classification || certificate.classification || certificate.class_of_degree || certificate.metadata?.class_of_degree || 'Not Specified'}
                     </p>
                   </div>
                 </div>
@@ -362,18 +379,25 @@ export default function Certificate() {
               </div>
 
               {/* Center QR Code */}
-              <div className="text-center flex flex-col items-center">
+              <div className="text-center flex flex-col items-center avoid-break">
                 <div className="bg-white p-2 rounded border border-gray-300 shadow-sm mb-2">
                   <QRCodeSVG
                     value={certificate.verification_url}
-                    size={70}
+                    /* Was 70px, which prints to about 18mm -- under 0.5mm per
+                       module at this error-correction level. Fine on screen,
+                       marginal from a phone photo of the paper. 120px prints
+                       to roughly 32mm and still fits the footer column. */
+                    size={120}
                     bgColor="#ffffff"
                     fgColor="#1e3a8a"
                     level="H"
                   />
                 </div>
                 <p className={`font-bold ${theme.heading} text-xs uppercase tracking-wider`}>Scan to Verify</p>
-                <p className="text-[10px] font-mono text-gray-500 break-all max-w-24 mt-1">{certificate.cert_id}</p>
+                {/* Kept on one line. Wrapping it (break-all inside max-w-24)
+                    made pdf.js report the id as several separate text items,
+                    so reading it back out of a downloaded PDF failed. */}
+                <p className="text-[9px] font-mono text-gray-500 whitespace-nowrap mt-1">{certificate.cert_id}</p>
               </div>
 
               {/* Right Signature */}
@@ -393,7 +417,7 @@ export default function Certificate() {
             </div>
 
             {/* Blockchain Hash Footer */}
-            <div className={`border-t-2 ${theme.accentBorder}/20 pt-4 flex items-center justify-center gap-3`}>
+            <div className={`border-t-2 ${theme.accentBorder}/20 pt-4 flex items-center justify-center gap-3 avoid-break`}>
               <ShieldCheck className="text-green-700 w-4 h-4" />
               <div className="text-center">
                 <p className="text-[10px] text-gray-500 uppercase tracking-widest font-sans mb-1">Immutable Blockchain Record</p>

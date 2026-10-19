@@ -31,5 +31,33 @@ const authorizeInstitution = (req, res, next) => {
   next();
 };
 
-// Export BOTH middlewares
-module.exports = { rbac, authorizeInstitution };
+/**
+ * Restricts a route to the regulator's own oversight views.
+ *
+ * ZAQA is an institution_admin like any other — what distinguishes it is
+ * institutions.type = 'regulatory_body', carried in the JWT as
+ * institution_type. Checking the role alone would expose every institution's
+ * activity to every institution's admin, so the institution type is the gate.
+ *
+ * super_admin passes as a system-wide account that is not bound to one
+ * institution's mandate, consistent with the rest of the codebase.
+ */
+const requireRegulator = (req, res, next) => {
+  if (!req.user) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+
+  const isRegulator = req.user.institution_type === 'regulatory_body';
+  const isSuperAdmin = req.user.role === 'super_admin';
+
+  if (!isRegulator && !isSuperAdmin) {
+    return res.status(403).json({
+      error: 'This view is restricted to the national qualifications regulator'
+    });
+  }
+
+  next();
+};
+
+// Export ALL middlewares
+module.exports = { rbac, authorizeInstitution, requireRegulator };

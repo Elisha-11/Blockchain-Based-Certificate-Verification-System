@@ -17,6 +17,11 @@ const DETAIL_STRATEGIES = {
     candidate_number: cert.candidate_number,
     exam_year: metadata.exam_year || null,
     subjects: metadata.subjects || [],
+    classification: metadata.classification || null,
+    // Surfaced so a verifier can confirm the classification follows from the
+    // grades printed on the certificate rather than taking it on trust.
+    aggregate: metadata.aggregate ?? null,
+    counted_subjects: metadata.counted_subjects ?? null,
     institution_name: cert.institution_name,
     institution_code: cert.institution_code
   }),
@@ -24,7 +29,10 @@ const DETAIL_STRATEGIES = {
     student_name: cert.student_name,
     issue_date: cert.issue_date,
     program: cert.program,
-    class_of_degree: metadata.class_of_degree || 'Not Specified',
+    // Certificates issued before the shared vocabulary stored their degree
+    // class under class_of_degree; fall back to it so they still display.
+    classification: metadata.classification || metadata.class_of_degree || null,
+    class_of_degree: metadata.class_of_degree || metadata.classification || 'Not Specified',
     student_id: cert.student_id,
     institution_name: cert.institution_name,
     institution_code: cert.institution_code
@@ -34,6 +42,7 @@ const DETAIL_STRATEGIES = {
     issue_date: cert.issue_date,
     program: cert.program,
     diploma_type: metadata.diploma_type || 'Not Specified',
+    classification: metadata.classification || null,
     student_id: cert.student_id,
     institution_name: cert.institution_name,
     institution_code: cert.institution_code
@@ -97,6 +106,10 @@ const buildVerificationHashInput = (cert, metadata) => {
       ? String(cert.program).trim() 
       : null,
     class_of_degree: metadata?.class_of_degree || null, // ✅ MOVED TO TOP LEVEL
+    // Mirrors buildCertificateHashInput: classification is read out of
+    // metadata and hashed at the top level. Absent on certificates issued
+    // before classification existed, which is what keeps their hash stable.
+    classification: metadata?.classification || null,
     metadata: {} // ✅ ALWAYS EMPTY FOR UNIVERSITY CERTS TO MATCH ISSUANCE
   };
 };
@@ -198,7 +211,10 @@ class VerificationService {
       }
 
       const certIdBytes = ethers.id(certId);
-      const hashBytes = ethers.toBeArray('0x' + storedHash);
+      // storedHash is a 64-char SHA-256 hex digest, already exactly 32 bytes
+      // — pass it directly rather than through ethers.toBeArray(), which
+      // treats hex as a number and strips leading zero BYTES.
+      const hashBytes = '0x' + storedHash;
       const result = await contract.verifyCertificate(certIdBytes, hashBytes);
 
       return { verified: Boolean(result), error: null };
@@ -239,7 +255,9 @@ class VerificationService {
         cert_id: certId,
         verifier_ip: context.verifier_ip,
         result,
-        user_agent: context.user_agent
+        user_agent: context.user_agent,
+        verification_method: context.verification_method,
+        document_sha256: context.document_sha256
       });
     } catch (logErr) {
       console.error('[VerifyService] Audit log failed:', logErr.message);

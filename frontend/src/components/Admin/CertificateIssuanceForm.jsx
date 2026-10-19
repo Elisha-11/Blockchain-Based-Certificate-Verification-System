@@ -2,6 +2,11 @@ import { useState } from 'react';
 import api from '../../services/api';
 import { CheckCircle, XCircle, Plus, Trash2, Loader2 } from 'lucide-react';
 import { CERTIFICATE_THEME } from '../../utils/certificateTheme';
+import {
+  CLASSIFICATIONS,
+  CLASSIFICATION_STYLES,
+  deriveExaminationClassification
+} from '../../utils/classification';
 
 // Mirrors backend ALLOWED_CERT_TYPES_BY_INSTITUTION_TYPE (certificateController.js):
 // universities/colleges issue degrees & diplomas, the examination council issues
@@ -62,7 +67,7 @@ export default function CertificateIssuanceForm({ onIssued }) {
     // University fields
     student_id: '',
     program: '',
-    class_of_degree: '',
+    classification: '',
     // Examination fields
     candidate_number: '',
     level: 'grade12',
@@ -109,7 +114,7 @@ export default function CertificateIssuanceForm({ onIssued }) {
       if (type === 'university') {
         payload.student_id = formData.student_id.trim() || null;
         payload.program = formData.program.trim();
-        payload.class_of_degree = formData.class_of_degree;
+        payload.classification = formData.classification || null;
       } else if (type === 'examination') {
         payload.level = formData.level;
         payload.candidate_number = formData.candidate_number.trim();
@@ -122,7 +127,10 @@ export default function CertificateIssuanceForm({ onIssued }) {
         payload.program = formData.program.trim();
         payload.diploma_type = formData.diploma_type.trim();
         payload.student_id = formData.student_id.trim() || null;
+        payload.classification = formData.classification || null;
       }
+      // Examination certificates send no classification: the backend derives
+      // it from the subject grades so it cannot be set by hand.
 
       const res = await api.post('/certificates', payload);
       setResponse(res.data);
@@ -133,7 +141,7 @@ export default function CertificateIssuanceForm({ onIssued }) {
         student_name: '',
         program: '',
         candidate_number: '',
-        class_of_degree: '',
+        classification: '',
         diploma_type: ''
       });
       setSubjects([{ code: '', grade: '' }]);
@@ -150,6 +158,10 @@ export default function CertificateIssuanceForm({ onIssued }) {
       setLoading(false);
     }
   };
+
+  // Recomputed on every keystroke so the officer sees the consequence of a
+  // grade as they type it.
+  const examClassification = deriveExaminationClassification(subjects);
 
   const inputClasses = "w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm";
   const labelClasses = "block text-gray-700 mb-1.5 text-sm font-medium";
@@ -223,13 +235,11 @@ export default function CertificateIssuanceForm({ onIssued }) {
               </div>
               <div>
                 <label className={labelClasses}>Classification</label>
-                <select name="class_of_degree" value={formData.class_of_degree} onChange={handleChange} className={inputClasses}>
-                  <option value="">Select Class...</option>
-                  <option value="First Class">First Class</option>
-                  <option value="Second Class Upper">Second Class Upper</option>
-                  <option value="Second Class Lower">Second Class Lower</option>
-                  <option value="Third Class">Third Class</option>
-                  <option value="Pass">Pass</option>
+                <select name="classification" value={formData.classification} onChange={handleChange} className={inputClasses} required>
+                  <option value="">Select Classification...</option>
+                  {CLASSIFICATIONS.map((c) => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
                 </select>
               </div>
               <div className="sm:col-span-2">
@@ -280,7 +290,7 @@ export default function CertificateIssuanceForm({ onIssued }) {
                         value={subject.grade} 
                         onChange={(e) => handleSubjectChange(index, 'grade', e.target.value)}
                         className="w-1/3 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
-                        maxLength={2}
+                        maxLength={1}
                       />
                       <button 
                         type="button" 
@@ -292,6 +302,32 @@ export default function CertificateIssuanceForm({ onIssued }) {
                       </button>
                     </div>
                   ))}
+                </div>
+              </div>
+
+              {/* Derived, not chosen: the classification follows from the
+                  grades above, so an issuing officer cannot award one the
+                  grades do not support. Shown here only as a preview - the
+                  backend recomputes and hashes its own value. */}
+              <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <div>
+                    <span className={labelClasses}>Classification (derived from grades)</span>
+                    {examClassification.classification ? (
+                      <p className="text-xs text-gray-500">
+                        Aggregate {examClassification.aggregate} over {examClassification.counted_subjects} {examClassification.counted_subjects === 1 ? 'subject' : 'best subjects'}
+                      </p>
+                    ) : (
+                      <p className="text-xs text-gray-500">
+                        Enter subject grades (1-9) to see the classification
+                      </p>
+                    )}
+                  </div>
+                  {examClassification.classification && (
+                    <span className={`px-3 py-1.5 rounded-lg border text-sm font-bold ${CLASSIFICATION_STYLES[examClassification.classification]}`}>
+                      {examClassification.classification}
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
@@ -307,6 +343,15 @@ export default function CertificateIssuanceForm({ onIssued }) {
               <div>
                 <label className={labelClasses}>Diploma Type</label>
                 <input name="diploma_type" value={formData.diploma_type} onChange={handleChange} placeholder="e.g. Advanced Certificate" className={inputClasses} required />
+              </div>
+              <div className="sm:col-span-2">
+                <label className={labelClasses}>Classification</label>
+                <select name="classification" value={formData.classification} onChange={handleChange} className={inputClasses} required>
+                  <option value="">Select Classification...</option>
+                  {CLASSIFICATIONS.map((c) => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
               </div>
               <div className="sm:col-span-2">
                 <label className={labelClasses}>Student ID (10-digit number) - Optional</label>

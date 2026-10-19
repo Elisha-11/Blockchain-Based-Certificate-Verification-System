@@ -127,7 +127,7 @@ const VerificationPortal = () => {
                   </div>
                   <div>
                     <span className="opacity-70 block text-xs">Classification</span>
-                    <span className="font-medium">{result.details.class_of_degree || 'N/A'}</span>
+                    <span className="font-medium">{result.details.classification || result.details.class_of_degree || 'N/A'}</span>
                   </div>
                 </>
               )}
@@ -138,6 +138,15 @@ const VerificationPortal = () => {
                   <div>
                     <span className="opacity-70 block text-xs">Candidate Number</span>
                     <span className="font-medium">{result.details.candidate_number || 'N/A'}</span>
+                  </div>
+                  <div>
+                    <span className="opacity-70 block text-xs">Classification</span>
+                    <span className="font-medium">
+                      {result.details.classification || 'N/A'}
+                      {result.details.aggregate != null && (
+                        <span className="opacity-70 font-normal"> (aggregate {result.details.aggregate})</span>
+                      )}
+                    </span>
                   </div>
                   <div className="col-span-2">
                     <span className="opacity-70 block text-xs mb-1">Subjects & Grades</span>

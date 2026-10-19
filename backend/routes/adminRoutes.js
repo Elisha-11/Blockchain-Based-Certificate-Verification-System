@@ -2,8 +2,9 @@
 const express = require('express');
 const router = express.Router();
 const adminController = require('../controllers/adminController');
+const auditController = require('../controllers/auditController');
 const auth = require('../middleware/auth');
-const { rbac } = require('../middleware/rbac');
+const { rbac, requireRegulator } = require('../middleware/rbac');
 
 /**
  * POST /api/admin/users
@@ -16,6 +17,30 @@ router.post('/users',
   auth,
   rbac('super_admin', 'institution_admin'),
   adminController.createUser
+);
+
+/**
+ * GET /api/admin/audit-logs
+ * Cross-institution trail of every issuance, failed issuance and revocation.
+ * Restricted to ZAQA (institution_type 'regulatory_body') and super_admin —
+ * an ordinary institution_admin must not see other institutions' activity.
+ */
+router.get('/audit-logs',
+  auth,
+  rbac('super_admin', 'institution_admin'),
+  requireRegulator,
+  auditController.list
+);
+
+/**
+ * GET /api/admin/audit-logs/summary
+ * Per-institution counts and classification distribution for the regulator.
+ */
+router.get('/audit-logs/summary',
+  auth,
+  rbac('super_admin', 'institution_admin'),
+  requireRegulator,
+  auditController.summary
 );
 
 module.exports = router;

@@ -53,6 +53,7 @@ function canonicalize(obj) {
  * @param {string} data.issue_date - Issue date in ISO format
  * @param {string} [data.candidate_number] - Examination candidate number (for ECZ)
  * @param {string} [data.program] - Academic program name (for university degrees)
+ * @param {string} [data.classification] - Distinction | Merit | Credit | Pass
  * @param {Object} [data.metadata] - Additional type-specific data
  * @returns {string} SHA-256 hash as hexadecimal string
  */
@@ -68,6 +69,17 @@ function generateDeterministicHash(data) {
       : null,
     program: data.program 
       ? normalizeString(data.program, '', true) 
+      : null,
+    // Classification (Distinction / Merit / Credit / Pass) is hashed so it is
+    // tamper-evident alongside the name and program. Lowercased for the same
+    // reason student_name is: capitalisation must not change the hash.
+    //
+    // Certificates issued before classification existed carry no value here,
+    // so this normalizes to null and removeEmptyValues() drops the key
+    // entirely — leaving their canonical JSON, and therefore their stored
+    // hash, byte-identical. Do not give this a non-null default.
+    classification: data.classification 
+      ? normalizeString(data.classification, '', true) 
       : null,
     metadata: data.metadata || null
   };

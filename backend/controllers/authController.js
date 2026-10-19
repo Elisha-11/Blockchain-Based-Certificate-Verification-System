@@ -85,7 +85,13 @@ exports.login = async (req, res) => {
     console.error('Login error:', err);
     
     if (err instanceof z.ZodError) {
-      return res.status(400).json({ error: err.errors[0].message });
+      // Zod v4 exposes '.issues'; '.errors' only exists in v3. Reading
+      // '.errors[0]' on v4 threw a TypeError, which Express turned into a
+      // 500 with a stack trace instead of this 400.
+      const issues = err.issues || err.errors || [];
+      return res.status(400).json({
+        error: issues[0]?.message || 'Invalid request body'
+      });
     }
     
     res.status(500).json({ error: 'Login failed', details: err.message });
@@ -123,7 +129,13 @@ exports.register = async (req, res) => {
     console.error('Register error:', err);
 
     if (err instanceof z.ZodError) {
-      return res.status(400).json({ error: err.errors[0].message });
+      // Zod v4 exposes '.issues'; '.errors' only exists in v3. Reading
+      // '.errors[0]' on v4 threw a TypeError, which Express turned into a
+      // 500 with a stack trace instead of this 400.
+      const issues = err.issues || err.errors || [];
+      return res.status(400).json({
+        error: issues[0]?.message || 'Invalid request body'
+      });
     }
     if (err.code === 'ER_DUP_ENTRY') {
       return res.status(409).json({ error: 'Email already registered' });
